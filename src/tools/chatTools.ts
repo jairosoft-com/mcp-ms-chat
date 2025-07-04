@@ -46,15 +46,8 @@ export function registerChatTools(server: McpServer): void {
 
         // Validate required access token
         if (!accessToken) {
-          const errorMsg = 'Missing required access token';
-          console.error('Validation error:', { message: errorMsg });
-          
-          return {
-            content: [{
-              type: 'text',
-              text: `❌ ${errorMsg}. Please provide a valid access token with the required Microsoft Graph API permissions.`,
-            }],
-          };
+          console.error('Validation error: Missing required access token');
+          throw new Error('access_token needed');
         }
 
         // Initialize the chat service with the provided credentials

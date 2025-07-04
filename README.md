@@ -8,7 +8,7 @@ A Node.js implementation of the Model Context Protocol (MCP) server for managing
 - Send messages to existing chats
 - Microsoft Graph API integration
 - TypeScript support with comprehensive type definitions
-- Environment-based configuration
+- Simple token-based authentication
 - Error handling and logging
 - MCP protocol implementation
 
@@ -18,18 +18,18 @@ A Node.js implementation of the Model Context Protocol (MCP) server for managing
 - npm 9.x or later
 - TypeScript 5.0 or later
 - Microsoft 365 account with appropriate permissions
-- Azure AD application with required API permissions:
-  - Chat.Create (Application)
-  - User.Read (delegated)
-  - offline_access (for refresh tokens)
+- Microsoft Graph API access token with required permissions:
+  - Chat.Create
+  - Chat.ReadWrite
+  - User.Read
 
 ## Getting Started
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/mcp-server-nodejs.git
-cd mcp-server-nodejs
+git clone https://github.com/yourusername/mcp-ms-chat.git
+cd mcp-ms-chat
 ```
 
 ### 2. Install dependencies
@@ -38,45 +38,41 @@ cd mcp-server-nodejs
 npm install
 ```
 
-### 3. Set up Azure AD Application
+### 3. Build the project
 
-1. Go to the [Azure Portal](https://portal.azure.com/)
-2. Navigate to "Azure Active Directory" > "App registrations" > "New registration"
-3. Enter a name for your application and select the appropriate account type
-4. After registration, note down the following from the "Overview" page:
-   - Application (client) ID
-   - Directory (tenant) ID
-5. Go to "Certificates & secrets" and create a new client secret
-6. Go to "API permissions" and add the following Microsoft Graph API permissions:
-   - **Application Permissions**:
-     - `Chat.Create` - Required for creating new chats
-     - `Chat.Read.All` - Required for reading chat details after creation (recommended)
-   - **Delegated Permissions**:
-     - `User.Read` - Required for basic user information
-     - `offline_access` - Required for refresh tokens
-
-> **Note on Permissions**:
-> - `Chat.Read.All` is required to read full chat details after creation. Without it, the server will only return basic chat information (ID and type). For full functionality, it's recommended to request this permission from your Azure AD administrator.
-   - Chat.Create (Application)
-   - User.Read (Delegated)
-   - offline_access
-7. Grant admin consent for the permissions
-   - User.Read (delegated)
-   - offline_access
-7. Grant admin consent for the permissions
-
-### 4. Configure Environment Variables
-
-Create a new `.env` file in the project root and add the following environment variables:
-
+```bash
+npm run build
 ```
-# Azure AD Application Settings
-AZURE_TENANT_ID=your_tenant_id_here
-AZURE_CLIENT_ID=your_client_id_here
-AZURE_CLIENT_SECRET=your_client_secret_here
 
-# User settings (optional, defaults to 'me' which is the current user)
-USER_ID=me  # or specific user email/ID
+## Authentication
+
+This service requires a valid Microsoft Graph API access token with the following permissions:
+- `Chat.Create` - For creating new chats
+- `Chat.ReadWrite` - For reading and updating chats
+- `User.Read` - For basic user information
+
+### Obtaining an Access Token
+
+You can obtain an access token using one of these methods:
+
+1. **Microsoft Graph Explorer**:
+   - Go to [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer)
+   - Sign in with your Microsoft 365 account
+   - Request the required permissions
+   - Copy the access token
+
+2. **Azure Portal**:
+   - Register an application in Azure AD
+   - Configure the required API permissions
+   - Use the OAuth 2.0 flow to obtain a token
+
+## Usage
+
+All API endpoints require an `access_token` parameter with a valid Microsoft Graph API token.
+
+Example request:
+```
+create-chat --accessToken "your_access_token_here" --topic "Team Discussion" --chatType "group" --members '[{"id":"user1@example.com"}]'
 ```
 
 ## Building the Project
@@ -211,23 +207,17 @@ To test the chat functionality:
 ## Troubleshooting
 
 ### Common Issues
+1. Access token is required
 
-1. **Authentication Errors**
-   - Ensure your Azure AD application has the `Chat.Create` (Application) permission
-   - Verify your client secret hasn't expired
-   - Check that your tenant ID and client ID are correct
-
-2. **Missing Environment Variables**
-   - The server will fail to start if required variables are missing
-   - Double-check your `.env` file and ensure all required variables are set
-
-3. **API Permissions**
+2. **API Permissions**
    - Ensure the Azure AD app has admin consent for the required permissions
    - The application needs `Chat.Create` as an Application permission (not Delegated)
 
-4. **Rate Limiting**
+3. **Rate Limiting**
    - The Microsoft Graph API has rate limits
    - Implement proper error handling and retry logic in your client
+
+
 
 ## License
 

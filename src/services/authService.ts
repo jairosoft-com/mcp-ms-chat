@@ -27,12 +27,7 @@ function validateAuthConfig(config: Partial<AuthConfig>): void {
     throw new AuthenticationError(
       'MISSING_ACCESS_TOKEN',
       'Access Token Required',
-      'A valid access token is required for authentication.\n\n' +
-      'Please obtain an access token using OAuth 2.0 authentication flow.\n' +
-      'The token should have the following Microsoft Graph API permissions:\n' +
-      '• Chat.Create\n' +
-      '• Chat.ReadWrite\n' +
-      '• User.Read'
+      'access_token needed'
     );
   }
 }
