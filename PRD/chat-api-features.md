@@ -3,14 +3,8 @@
 ## Overview
 This document outlines the essential chat features for a personal assistant using Microsoft Graph Chat API as an MCP server. The implementation focuses on core chat functionality with delegated permissions and direct input-based authentication.
 
-## Required Azure AD Configuration
-Users will need to provide the following information, which can be obtained from their Azure AD admin:
-
-1. **Tenant ID** - The unique identifier of the Azure AD tenant
-2. **Client ID** - The application (client) ID registered in Azure AD
-3. **Client Secret** - A client secret for the registered application
-4. **Access Token** - (Optional) Pre-authenticated access token
-5. **User Principal Name (UPN)** - The email of the user performing the actions
+## Getting access token
+Each org will be given a dedicated micro frontend for copying the value of access_token after signing in using their org's Azure AD credentials.
 
 ## Core Features
 
@@ -18,7 +12,7 @@ Users will need to provide the following information, which can be obtained from
 **Permission:** Chat.ReadBasic
 **Description:** List all available chats with basic information
 **Inputs:**
-- Azure credentials
+- access_token
 - Optional: Filter parameters (unread, date range, etc.)
 
 ### 2. Read Chat Messages

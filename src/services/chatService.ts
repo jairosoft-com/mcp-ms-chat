@@ -26,10 +26,25 @@ export interface Chat {
   lastUpdatedDateTime: string;
   webUrl?: string;
   members?: Array<{
+    userPrincipalName: string;
     id: string;
     displayName?: string;
     roles: string[];
   }>;
+  lastMessagePreview?: {
+    id: string;
+    createdDateTime: string;
+    body: {
+      contentType: 'text' | 'html' | 'content';
+      content: string;
+    };
+    from?: {
+      user: {
+        id: string;
+        displayName?: string;
+      };
+    };
+  };
 }
 
 export interface ChatMessage {

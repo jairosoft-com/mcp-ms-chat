@@ -68,7 +68,17 @@ export interface Chat {
     createdDateTime?: string;
     isDeleted?: boolean;
     messageType?: 'message' | 'systemEventMessage' | 'unknown';
-  };
+    from?: {
+      user: {
+        id: string;
+        displayName?: string;
+      };
+    };
+    body?: {
+      content: string;
+      contentType: 'text' | 'html' | 'content';
+    };
+  } | null;
   
   /** The members in the chat */
   members?: Array<{
