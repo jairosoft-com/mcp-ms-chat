@@ -1,4 +1,24 @@
 /**
+ * Represents a chat member
+ */
+export interface ChatMember {
+  /** The member's ID (user principal name or Azure AD user ID) */
+  id: string;
+  
+  /** The member's display name */
+  displayName?: string;
+  
+  /** The member's roles in the chat */
+  roles?: string[];
+  
+  /** The member's user principal name (email) */
+  userPrincipalName?: string;
+  
+  /** The member's user ID */
+  userId?: string;
+}
+
+/**
  * Represents a chat message
  */
 export interface ChatMessage {

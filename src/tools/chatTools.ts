@@ -1,7 +1,18 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createChatSchema } from '../schemas/chatSchemas.js';
-import { createChat } from '../services/chatService.js';
+import { createChatSchema, type CreateChatInput } from '../schemas/chatSchemas.js';
+import type { ChatMember } from '../interfaces/chat.js';
+import ChatService from '../services/chatService.js';
 import type { Chat } from '../interfaces/chat.js';
+import { z } from 'zod';
+
+// Type for the chat creation response
+interface ChatCreationResponse {
+  content: Array<{ type: string; text: string }>;
+  metadata?: {
+    chatId: string;
+    webUrl?: string;
+  };
+}
 
 /**
  * Registers the chat tool with the MCP server
@@ -13,14 +24,70 @@ export function registerChatTools(server: McpServer): void {
     'create-chat',
     'Create a new chat in Microsoft Teams',
     createChatSchema.shape,
-    async (args: unknown) => {
+    async (args: z.infer<typeof createChatSchema>) => {
+      // Log the incoming request (without sensitive data)
+      const safeArgs = args ? { ...args as Record<string, unknown> } : {};
+      if ('clientSecret' in safeArgs) safeArgs.clientSecret = '***REDACTED***';
+      if ('accessToken' in safeArgs && safeArgs.accessToken) safeArgs.accessToken = '***REDACTED***';
+
+      console.log('Creating chat with parameters:', JSON.stringify(safeArgs, null, 2));
+
       try {
         // The schema validation is handled by the MCP server
-        const chatData = args as Parameters<typeof createChat>[0];
+        const chatData = args as CreateChatInput;
+
+        // Extract auth fields
+        const { 
+          accessToken,
+          ...chatPayload
+        } = chatData as CreateChatInput & { 
+          accessToken: string;
+        };
+
+        // Validate required access token
+        if (!accessToken) {
+          const errorMsg = 'Missing required access token';
+          console.error('Validation error:', { message: errorMsg });
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `❌ ${errorMsg}. Please provide a valid access token with the required Microsoft Graph API permissions.`,
+            }],
+          };
+        }
+
+        // Initialize the chat service with the provided credentials
+        console.log('Initializing chat service...');
+        const chatService = new ChatService({
+          accessToken
+        });
+
+        // Prepare chat payload with proper typing
+        const chatRequest = {
+          topic: typeof chatPayload.topic === 'string' ? chatPayload.topic : 'New Chat',
+          chatType: (chatPayload.chatType && 
+                    ['oneOnOne', 'group', 'meeting', 'unknown'].includes(chatPayload.chatType as string)) 
+                    ? chatPayload.chatType as 'oneOnOne' | 'group' | 'meeting' | 'unknown' 
+                    : 'group',
+          members: (Array.isArray(chatPayload.members) ? chatPayload.members : []) as ChatMember[]
+        };
+
+        console.log('Creating chat with payload:', { 
+          topic: chatRequest.topic,
+          chatType: chatRequest.chatType,
+          memberCount: chatRequest.members.length
+        });
+
+        const chat = await chatService.createChat(chatRequest);
         
-        // Call the chat service to create the chat
-        const chat = await createChat(chatData);
-        
+        console.log('Successfully created chat:', { 
+          chatId: chat.id, 
+          topic: chat.topic,
+          createdDateTime: chat.createdDateTime,
+          webUrl: chat.webUrl
+        });
+
         // Format the response
         const response = formatChatResponse(chat);
         
@@ -36,11 +103,15 @@ export function registerChatTools(server: McpServer): void {
         };
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Error creating chat:', {
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined
+        });
         
         return {
           content: [{
             type: 'text',
-            text: `❌ Failed to create chat: ${errorMessage}`,
+            text: `❌ Failed to create chat: ${errorMessage}\n\nPlease check your authentication credentials and try again.`,
           }],
         };
       }
