@@ -1,0 +1,28 @@
+{
+  "name": "mcp-server-node",
+  "version": "1.0.0",
+  "main": "build/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "ts-node --esm src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["mcp", "microsoft-graph", "teams", "chat"],
+  "author": "",
+  "license": "ISC",
+  "description": "MCP Server for Microsoft Teams Chat Integration",
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.0.1",
+    "@microsoft/microsoft-graph-client": "^3.0.5",
+    "@modelcontextprotocol/sdk": "^1.12.3",
+    "dotenv": "^16.4.5",
+    "zod": "^3.25.67"
+  }
+}
