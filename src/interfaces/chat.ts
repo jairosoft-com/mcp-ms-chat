@@ -31,8 +31,9 @@ export interface Chat {
   members?: Array<{
     id: string;
     displayName?: string;
-    userId?: string;
     email?: string;
+    roles?: string[];
+    userPrincipalName?: string;
   }>;
   lastMessagePreview?: {
     id: string;

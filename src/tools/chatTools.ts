@@ -73,7 +73,7 @@ export function registerChatTools(server: McpServer): void {
             'createdDateTime',
             'lastUpdatedDateTime'
           ],
-          expand: ['members($select=id,displayName,userPrincipalName)']
+          expand: ['members']
         };
 
         // Merge provided options with defaults
@@ -144,16 +144,98 @@ export function registerChatTools(server: McpServer): void {
           members: chat.members?.map(member => ({
             id: member.id,
             displayName: member.displayName || 'Unknown',
-            userPrincipalName: member.email || '',
+            email: member.email || '',
+            userPrincipalName: member.userPrincipalName || '',
+            roles: member.roles || []
           })) || []
         }));
 
         // console.error('Formatted chats:', formattedChats);
 
+        // Format member list for display
+        const formatMemberList = (members: any[] = []) => {
+          if (!members.length) return 'No members';
+          return members.map(m => 
+            `${m.displayName || 'Unknown'}${m.email ? ` (${m.email})` : ''}${m.roles?.length ? ` [${m.roles.join(', ')}]` : ''}`
+          ).join('\n  ');
+        };
+
+        // Create a tabulated view of chats with expandable member details
+        const formatChatTable = (chats: any[]) => {
+          if (chats.length === 0) return 'No chats found';
+          
+          // Define column widths
+          const columns = {
+            index: 8,       // [1]  
+            topic: 30,      // Team Collaboration Channel
+            type: 15,       // group
+            members: 8,     // 5
+            lastMessage: 40  // John: Let's discuss the...
+          };
+          
+          // Create header
+          const header = [
+            'ID'.padEnd(columns.index),
+            'TOPIC'.padEnd(columns.topic),
+            'TYPE'.padEnd(columns.type),
+            'MEMBERS'.padStart(columns.members),
+            'LAST MESSAGE'.padEnd(columns.lastMessage)
+          ].join(' | ');
+          
+          // Create separator
+          const separator = '='.repeat(header.length);
+          
+          // Create rows with expandable member details
+          const rows: string[] = [];
+          
+          chats.forEach((chat, index) => {
+            const lastMessage = chat.lastMessage 
+              ? `${chat.lastMessage.from}: ${chat.lastMessage.content.substring(0, 38)}${chat.lastMessage.content.length > 38 ? '...' : ''}`
+              : 'No messages';
+            
+            // Main row
+            rows.push([
+              `[${index + 1}]`.padEnd(columns.index),
+              (chat.topic || 'No topic').substring(0, columns.topic - 3).padEnd(columns.topic) + (chat.topic && chat.topic.length > columns.topic - 3 ? '...' : ''),
+              chat.type.padEnd(columns.type),
+              String(chat.memberCount).padStart(columns.members),
+              lastMessage.padEnd(columns.lastMessage)
+            ].join(' | '));
+            
+            // Member details row (collapsed by default)
+            if (chat.members?.length) {
+              const memberDetails = formatMemberList(chat.members);
+              rows.push(`  ${' '.repeat(columns.index + columns.topic + columns.type + 6)}Members: ${memberDetails}`);
+            }
+            
+            // Add a thin separator between chats
+            rows.push('-'.repeat(header.length));
+          });
+          
+          // Remove the last separator if it exists
+          if (rows[rows.length - 1] === '-'.repeat(header.length)) {
+            rows.pop();
+          }
+          
+          return [
+            `Found ${chats.length} chats (${response.value.length} total):\n`,
+            separator,
+            header,
+            separator,
+            ...rows
+          ].join('\n');
+        };
+        
         return {
           content: [{
             type: 'text',
-            text: `Found ${response.value.length} chats`
+            text: formatChatTable(formattedChats),
+            _meta: {
+              chats: formattedChats,
+              count: response.value.length,
+              hasMore: !!response['@odata.nextLink'],
+              nextLink: response['@odata.nextLink']
+            }
           }],
           metadata: {
             chats: formattedChats,
