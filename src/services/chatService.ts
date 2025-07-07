@@ -1,6 +1,7 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AuthConfig } from "./authService.js";
 import { AuthenticationError } from "../errors/authError.js";
+import { Chat, ChatCollectionResponse, ChatMember, ChatMessage, ChatMessageCollectionResponse, ListChatsOptions } from "../interfaces/chat.js";
 
 /**
  * Interface for chat service configuration
@@ -10,76 +11,6 @@ interface ChatServiceConfig extends AuthConfig {
    * Optional user principal name for context
    */
   userPrincipalName?: string;
-}
-
-// Define interfaces for better type safety
-export interface ChatMember {
-  id: string;
-  roles?: string[];
-}
-
-export interface Chat {
-  id: string;
-  topic?: string;
-  chatType: 'oneOnOne' | 'group' | 'meeting' | 'unknown';
-  createdDateTime: string;
-  lastUpdatedDateTime: string;
-  webUrl?: string;
-  members?: Array<{
-    userPrincipalName: string;
-    id: string;
-    displayName?: string;
-    roles: string[];
-  }>;
-  lastMessagePreview?: {
-    id: string;
-    createdDateTime: string;
-    body: {
-      contentType: 'text' | 'html' | 'content';
-      content: string;
-    };
-    from?: {
-      user: {
-        id: string;
-        displayName?: string;
-      };
-    };
-  };
-}
-
-export interface ChatMessage {
-  id: string;
-  createdDateTime: string;
-  messageType: 'message' | 'systemEventMessage';
-  body: {
-    contentType: 'text' | 'html' | 'content';
-    content: string;
-  };
-  from?: {
-    user: {
-      id: string;
-      displayName?: string;
-    };
-  };
-}
-
-export interface ChatMessageCollectionResponse {
-  value: ChatMessage[];
-  '@odata.nextLink'?: string;
-}
-
-export interface ChatCollectionResponse {
-  value: Chat[];
-  '@odata.nextLink'?: string;
-}
-
-export interface ListChatsOptions {
-  filter?: string;
-  top?: number;
-  skip?: number;
-  orderby?: string;
-  select?: string[];
-  expand?: string[];
 }
 
 /**
@@ -286,6 +217,7 @@ If the problem persists, please contact your system administrator with the error
         request = request.skip(options.skip);
       }
       
+      console.error("request: ", request);
       const response = await request.get();
       return response as ChatCollectionResponse;
     } catch (error) {

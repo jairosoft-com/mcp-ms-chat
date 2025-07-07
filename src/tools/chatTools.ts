@@ -124,8 +124,11 @@ export function registerChatTools(server: McpServer): void {
           expand: options.expand
         });
 
+        console.error('Fetched chats:', response.value);
+
         // Format the response for the MCP inspector
-        const formattedChats = response.value.map(chat => ({
+        const formattedChats = response.value.map(chat =>
+           ({
           id: chat.id,
           topic: chat.topic || 'No topic',
           type: chat.chatType || 'unknown',
@@ -141,10 +144,11 @@ export function registerChatTools(server: McpServer): void {
           members: chat.members?.map(member => ({
             id: member.id,
             displayName: member.displayName || 'Unknown',
-            userPrincipalName: member.userPrincipalName || '',
-            roles: member.roles || []
+            userPrincipalName: member.email || '',
           })) || []
         }));
+
+        // console.error('Formatted chats:', formattedChats);
 
         return {
           content: [{
@@ -270,7 +274,7 @@ export function registerChatTools(server: McpServer): void {
         });
 
         const chat = await chatService.createChat(chatRequest);
-        
+        console.error("chat: ", chat)
         console.log('Successfully created chat:', { 
           chatId: chat.id, 
           topic: chat.topic,
@@ -328,8 +332,9 @@ function formatChatResponse(chat: Chat): string {
   
   // Add members if available
   if (chat.members && chat.members.length > 0) {
+    console.log("members: ", chat)
     const memberList = chat.members
-      .map(member => `- ${member.displayName || member.userId || 'Unknown user'}`)
+      .map(member => `- ${member.displayName || member.id || 'Unknown user'}`)
       .join('\n');
     
     parts.push('\n**Members:**');

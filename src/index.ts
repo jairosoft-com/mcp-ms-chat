@@ -14,47 +14,13 @@ const server = new McpServer({
 // Register tools
 registerChatTools(server);
 
-// Store the original console methods
-const originalConsole = {
-  log: console.log,
-  error: console.error,
-  warn: console.warn,
-  info: console.info,
-  debug: console.debug
-};
-
-// Suppress all console output during server initialization
-function suppressConsole() {
-  console.log = () => {};
-  console.error = () => {};
-  console.warn = () => {};
-  console.info = () => {};
-  console.debug = () => {};
-}
-
-// Restore original console methods
-function restoreConsole() {
-  console.log = originalConsole.log;
-  console.error = originalConsole.error;
-  console.warn = originalConsole.warn;
-  console.info = originalConsole.info;
-  console.debug = originalConsole.debug;
-}
-
 // Start the server
 async function main() {
   try {
-    // Suppress console output during server initialization
-    suppressConsole();
-    
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    
-    // Restore console after successful connection
-    restoreConsole();
+    console.error("Chat MCP Server running on stdio");
   } catch (error) {
-    // Restore console before exiting on error
-    restoreConsole();
     process.exit(1);
   }
 }
