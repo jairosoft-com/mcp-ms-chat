@@ -131,6 +131,30 @@ The server provides the following MCP tools for managing Teams chats:
   - `content`: (Required) The message content
   - `contentType`: (Optional) 'text', 'html', or 'content' (default: 'text')
 
+**Members Sample Payload:**
+
+Here's an example of how to structure the `members` array when creating a chat:
+
+```json
+[
+  {
+    "id": "user1@example.com",
+    "roles": ["owner"]
+  },
+  {
+    "id": "user2@example.com",
+    "roles": []
+  }
+]
+```
+
+**Notes about members:**
+- At least one member is required
+- The first member is typically the creator/owner of the chat
+- For one-on-one chats, specify exactly two members
+- For group chats, you can specify two or more members
+- The `roles` array is optional and defaults to `["owner"]` if not specified
+
 **Example Request:**
 ```json
 {
@@ -167,6 +191,80 @@ The server provides the following MCP tools for managing Teams chats:
 
 **Chat ID:** 19:meeting_...
 ```
+
+### 2. **send-message** - Send a message to an existing chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat to send the message to
+- `content`: (Required) The content of the message (max 5000 characters)
+- `contentType`: (Optional) The content type of the message - 'text' or 'html' (default: 'text')
+- `messageMetadata`: (Optional) Additional metadata for the message
+
+**Examples:**
+
+1. **Basic Text Message**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "Hello team! Just checking in with a quick update.",
+  "contentType": "text"
+}
+```
+
+2. **HTML Formatted Message**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "<h1>Meeting Reminder</h1><p>Don't forget about our <strong>team meeting</strong> today at <span style='color:blue'>2:00 PM</span>.</p><p>Agenda:</p><ul><li>Project updates</li><li>Q2 Planning</li><li>Team feedback</li></ul>",
+  "contentType": "html"
+}
+```
+
+3. **Message with Metadata**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "Please review the latest project documentation.",
+  "contentType": "text",
+  "messageMetadata": {
+    "priority": "high",
+    "tags": ["important", "documentation"],
+    "mentions": ["user1@example.com", "user2@example.com"],
+    "source": "automated-notification",
+    "referenceId": "doc-12345"
+  }
+}
+```
+
+4. **Message with Rich Card**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "Here's the latest project update",
+  "contentType": "html",
+  "messageMetadata": {
+    "card": {
+      "title": "Project Update: Q2 2025",
+      "subtitle": "Milestone Achievements",
+      "text": "We've successfully completed 85% of our Q2 goals!",
+      "images": ["https://example.com/project-update.png"],
+      "buttons": [
+        {
+          "type": "openUrl",
+          "title": "View Dashboard",
+          "value": "https://example.com/dashboard"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Notes:**
+- `contentType: 'text'` is best for plain text messages
+- `contentType: 'html'` allows for rich text formatting
+- `messageMetadata` can be used to attach additional context or functionality to messages
+- The total message size (including metadata) must not exceed 28KB
 
 ## Development
 

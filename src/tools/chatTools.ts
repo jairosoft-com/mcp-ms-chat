@@ -2,8 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { 
   createChatSchema, 
   listChatsSchema, 
+  sendMessageSchema,
   type CreateChatInput, 
-  type ListChatsInput 
+  type ListChatsInput,
+  type SendMessageInput 
 } from '../schemas/chatSchemas.js';
 import {
   type ChatMessage
@@ -26,6 +28,87 @@ interface ChatCreationResponse {
  * @param server - The MCP server instance
  */
 export function registerChatTools(server: McpServer): void {
+  // Register the Send Message tool with the server
+  server.tool(
+    'send-message',
+    'Send a message to a chat or user in Microsoft Teams',
+    sendMessageSchema.shape,
+    /**
+     * @example
+     * // Send a simple text message to a chat
+     * {
+     *   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     *   "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+     *   "content": "Hello, this is a test message!"
+     * }
+     * 
+     * @example
+     * // Send an HTML formatted message with metadata
+     * {
+     *   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     *   "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+     *   "content": "<h1>Important Update</h1><p>This is an <strong>important</strong> message!</p>",
+     *   "contentType": "html",
+     *   "messageMetadata": {
+     *     "priority": "high",
+     *     "tags": ["important", "update"]
+     *   }
+     * }
+     */
+    async function sendMessageHandler(args: z.infer<typeof sendMessageSchema>) {
+      // Log the incoming request (without sensitive data)
+      const safeArgs = args ? { ...args as Record<string, unknown> } : {};
+      if ('accessToken' in safeArgs && safeArgs.accessToken) safeArgs.accessToken = '***REDACTED***';
+
+      console.log('Sending message with parameters:', JSON.stringify(safeArgs, null, 2));
+
+      try {
+        // The schema validation is handled by the MCP server
+        const messageInput = args as SendMessageInput;
+
+        // Initialize the chat service with the provided credentials
+        console.log('Initializing chat service...');
+        const chatService = new ChatService({
+          accessToken: messageInput.accessToken
+        });
+
+        console.log(`Sending message to chat ${messageInput.chatId}...`);
+        const messageData: any = {
+          content: messageInput.content,
+          contentType: messageInput.contentType
+        };
+
+        // Only add messageMetadata if it has values
+        if (messageInput.messageMetadata && Object.keys(messageInput.messageMetadata).length > 0) {
+          messageData.messageMetadata = messageInput.messageMetadata;
+        }
+
+        const message = await chatService.sendMessage(
+          messageInput.chatId,
+          messageData
+        );
+
+        console.log('Message sent successfully:', message.id);
+        
+        // Format the response
+        return {
+          content: [{
+            type: 'text',
+            text: `Message sent successfully to chat ${messageInput.chatId}.`
+          }],
+          metadata: {
+            messageId: message.id,
+            chatId: messageInput.chatId,
+            sentDateTime: new Date().toISOString()
+          }
+        };
+      } catch (error) {
+        console.error('Error sending message:', error);
+        throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  );
+
   // Register the List Chats tool with the server
   // List Chats Tool
   server.tool(

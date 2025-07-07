@@ -112,3 +112,54 @@ export const listChatsSchema = authSchema.extend({
  */
 export type CreateChatInput = z.infer<typeof createChatSchema>;
 export type ListChatsInput = z.infer<typeof listChatsSchema>;
+
+/**
+ * Schema for sending a chat message
+ */
+export const sendMessageSchema = authSchema.extend({
+  /**
+   * The ID of the chat to send the message to
+   * @example "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2"
+   */
+  chatId: z.string({
+    required_error: 'Chat ID is required',
+    invalid_type_error: 'Chat ID must be a string',
+  })
+  .min(1, 'Chat ID cannot be empty')
+  .describe('The ID of the chat to send the message to'),
+  
+  /**
+   * The content of the message
+   * @example "Hello, this is a test message!"
+   */
+  content: z.string({
+    required_error: 'Message content is required',
+    invalid_type_error: 'Message content must be a string',
+  })
+  .min(1, 'Message content cannot be empty')
+  .max(5000, 'Message content cannot exceed 5000 characters')
+  .describe('The content of the message'),
+  
+  /**
+   * The content type of the message
+   * @default "text"
+   */
+  contentType: z.enum(['text', 'html'], {
+    required_error: 'Content type is required',
+    invalid_type_error: 'Content type must be either "text" or "html"',
+  })
+  .default('text')
+  .describe('The content type of the message'),
+  
+  /**
+   * Optional message metadata
+   */
+  messageMetadata: z.record(z.any())
+    .optional()
+    .describe('Optional metadata for the message')
+});
+
+/**
+ * Type for the send message input
+ */
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;
