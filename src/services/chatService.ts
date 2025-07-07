@@ -203,18 +203,33 @@ If the problem persists, please contact your system administrator with the error
       
       let request = client.api('/me/chats');
       
+      // Apply pagination
+      if (options.top) {
+        request = request.top(options.top);
+      }
+
+      if (options.skip) {
+        request = request.top(options.skip);
+      }
+            
       // Apply filters if provided
       if (options.filter) {
         request = request.filter(options.filter);
       }
       
-      // Apply pagination
-      if (options.top) {
-        request = request.top(options.top);
+      // Apply ordering if provided
+      if (options.orderby) {
+        request = request.orderby(options.orderby);
       }
-      
-      if (options.skip) {
-        request = request.skip(options.skip);
+
+      // Apply select if provided
+      if (options.select) {
+        request = request.select(options.select);
+      }
+
+      // Apply expand if provided
+      if (options.expand) {
+        request = request.expand(options.expand);
       }
       
       console.error("request: ", request);
