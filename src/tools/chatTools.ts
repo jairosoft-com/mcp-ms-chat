@@ -1,5 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { createChatSchema, listChatsSchema, type CreateChatInput, type ListChatsInput } from '../schemas/chatSchemas.js';
+import { 
+  createChatSchema, 
+  listChatsSchema, 
+  type CreateChatInput, 
+  type ListChatsInput 
+} from '../schemas/chatSchemas.js';
+import {
+  type ChatMessage
+} from '../interfaces/chat.js';
 import type { ChatMember, Chat } from '../interfaces/chat.js';
 import ChatService from '../services/chatService.js';
 import { z } from 'zod';
@@ -19,6 +27,7 @@ interface ChatCreationResponse {
  */
 export function registerChatTools(server: McpServer): void {
   // Register the List Chats tool with the server
+  // List Chats Tool
   server.tool(
     'list-chats',
     'List all available chats in Microsoft Teams with basic information',
@@ -301,6 +310,134 @@ export function registerChatTools(server: McpServer): void {
       }
     }
   );
+
+  // List Messages Tool
+  server.tool(
+    'list-messages',
+    'List messages in a specific chat with advanced filtering options',
+    {
+      accessToken: z.string().describe('Microsoft Graph API access token'),
+      chatId: z.string().describe('ID of the chat to list messages from'),
+      from: z.string().optional().describe('Filter messages from a specific user (email or ID). Use "me" for current user'),
+      isRead: z.boolean().optional().describe('Filter read/unread messages'),
+      importance: z.enum(['low', 'normal', 'high']).optional().describe('Filter by importance level'),
+      contains: z.string().optional().describe('Filter messages containing specific text'),
+      afterDateTime: z.string().optional().describe('Filter messages after this date (ISO 8601 format)'),
+      beforeDateTime: z.string().optional().describe('Filter messages before this date (ISO 8601 format)'),
+      top: z.number().int().min(1).max(1000).optional().default(50).describe('Number of messages to return (1-1000)'),
+      skip: z.number().int().min(0).optional().default(0).describe('Number of messages to skip'),
+      orderBy: z.string().optional().default('createdDateTime desc').describe('Sort order (e.g., "createdDateTime desc")'),
+    },
+    async (args) => {
+      try {
+        const chatService = new ChatService({
+          accessToken: args.accessToken
+        });
+
+        const messages = await chatService.getChatMessages(args.chatId, {
+          from: args.from,
+          isRead: args.isRead,
+          importance: args.importance,
+          contains: args.contains,
+          afterDateTime: args.afterDateTime,
+          beforeDateTime: args.beforeDateTime,
+          top: args.top,
+          skip: args.skip,
+          orderBy: args.orderBy
+        });
+
+        // Format messages for display
+        const formattedMessages = messages.value.map((msg, index) => ({
+          id: msg.id,
+          index: index + 1,
+          from: msg.from?.user?.displayName || 'Unknown',
+          content: msg.body?.content || '',
+          created: msg.createdDateTime,
+          isRead: msg.isRead,
+          importance: msg.importance || 'normal',
+          chatId: args.chatId
+        }));
+
+        // Create a tabulated view of messages
+        const formatMessageTable = (msgs: typeof formattedMessages) => {
+          if (msgs.length === 0) return 'No messages found';
+          
+          // Define column widths
+          const columns = {
+            index: 8,       // [1]  
+            from: 25,       // John Doe
+            content: 50,    // Message preview...
+            date: 20,       // 2023-01-01 12:00 PM
+            status: 10      // [Unread]
+          };
+          
+          // Create header
+          const header = [
+            '#'.padEnd(columns.index),
+            'FROM'.padEnd(columns.from),
+            'MESSAGE'.padEnd(columns.content),
+            'DATE'.padEnd(columns.date),
+            'STATUS'.padEnd(columns.status)
+          ].join(' | ');
+          
+          // Create separator
+          const separator = '='.repeat(header.length);
+          
+          // Create rows
+          const rows = msgs.map(msg => [
+            `[${msg.index}]`.padEnd(columns.index),
+            (msg.from || 'Unknown').substring(0, columns.from - 3).padEnd(columns.from) + (msg.from && msg.from.length > columns.from - 3 ? '...' : ''),
+            (msg.content || '').substring(0, columns.content - 3).replace(/\n/g, ' ').padEnd(columns.content) + (msg.content && msg.content.length > columns.content - 3 ? '...' : ''),
+            new Date(msg.created).toLocaleString().padEnd(columns.date),
+            (msg.isRead ? '' : '[Unread]').padEnd(columns.status)
+          ].join(' | '));
+          
+          return [
+            `Showing ${msgs.length} messages:\n`,
+            separator,
+            header,
+            separator,
+            ...rows
+          ].join('\n');
+        };
+
+        return {
+          content: [{
+            type: 'text',
+            text: formatMessageTable(formattedMessages),
+            _meta: {
+              messages: formattedMessages,
+              count: messages.value.length,
+              hasMore: !!messages['@odata.nextLink'],
+              nextLink: messages['@odata.nextLink']
+            }
+          }]
+        };
+      } catch (error) {
+        console.error('Error listing messages:', error);
+        throw new Error(`Failed to list messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  );
+
+  // Define interface for the formatted chat result
+  interface FormattedChatResult {
+    index: number;
+    id: string;
+    topic: string;
+    type: string;
+    created: string;
+    lastUpdated: string;
+    webUrl: string;
+  }
+
+  // Search Chats by Name or Topic Tool
+  const searchChatsSchema = z.object({
+    accessToken: z.string().describe('Microsoft Graph API access token'),
+    searchTerm: z.string().describe('Search term to match against chat names or topics'),
+    top: z.number().int().min(1).max(100).optional().default(20).describe('Maximum number of results to return (1-100)'),
+    skip: z.number().int().min(0).optional().default(0).describe('Number of results to skip for pagination')
+  });
 
   // Register the Create Chat tool with the server
   server.tool(

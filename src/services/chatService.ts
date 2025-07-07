@@ -1,7 +1,15 @@
 import { Client } from "@microsoft/microsoft-graph-client";
 import { AuthConfig } from "./authService.js";
 import { AuthenticationError } from "../errors/authError.js";
-import { Chat, ChatCollectionResponse, ChatMember, ChatMessage, ChatMessageCollectionResponse, ListChatsOptions } from "../interfaces/chat.js";
+import { 
+  Chat, 
+  ChatCollectionResponse, 
+  ChatMember, 
+  ChatMessage, 
+  ChatMessageCollectionResponse, 
+  ListChatsOptions, 
+  ListMessagesOptions
+} from "../interfaces/chat.js";
 
 /**
  * Interface for chat service configuration
@@ -242,28 +250,178 @@ If the problem persists, please contact your system administrator with the error
   }
 
   /**
-   * Get messages from a chat
+   * Get messages from a chat with advanced filtering and pagination
    * @param chatId The ID of the chat
-   * @param top Maximum number of messages to return
+   * @param options Message listing options
    * @returns Collection of chat messages
    */
   public async getChatMessages(
     chatId: string,
-    top: number = 50
+    options: ListMessagesOptions = {}
   ): Promise<ChatMessageCollectionResponse> {
     try {
       const client = await this.getAuthenticatedClient();
       
-      const response = await client
+      // Start building the request
+      let request = client
         .api(`/chats/${chatId}/messages`)
-        .top(top)
-        .orderby('createdDateTime desc')
-        .get();
-
+        .header('Prefer', 'outlook.timezone="UTC"');
+      
+      // Apply pagination
+      if (options.top) {
+        request = request.top(Math.min(options.top, 1000)); // Enforce max page size
+      } else {
+        request = request.top(50); // Default page size
+      }
+      
+      if (options.skip) {
+        request = request.skip(options.skip);
+      }
+      
+      // Build filter string (excluding isRead which we'll handle client-side)
+      const filterParts: string[] = [];
+      
+      if (options.from) {
+        const fromValue = options.from === 'me' 
+          ? this.config.userPrincipalName || 'me' 
+          : options.from;
+        filterParts.push(`from/emailAddress/address eq '${encodeURIComponent(fromValue)}'`);
+      }
+      
+      if (options.importance) {
+        filterParts.push(`importance eq '${options.importance}'`);
+      }
+      
+      if (options.afterDateTime) {
+        filterParts.push(`createdDateTime ge ${new Date(options.afterDateTime).toISOString()}`);
+      }
+      
+      if (options.beforeDateTime) {
+        filterParts.push(`createdDateTime le ${new Date(options.beforeDateTime).toISOString()}`);
+      }
+      
+      if (options.contains) {
+        filterParts.push(`contains(body/content, '${options.contains.replace(/'/g, "''")}')`);
+      }
+      
+      // Apply filter if we have any conditions
+      if (filterParts.length > 0) {
+        request = request.filter(filterParts.join(' and '));
+      }
+      
+      // Apply sorting
+      if (options.orderBy) {
+        request = request.orderby(options.orderBy);
+      } else {
+        // Default sort order
+        request = request.orderby('createdDateTime desc');
+      }
+      
+      // Apply select fields if specified
+      if (options.select && options.select.length > 0) {
+        request = request.select(options.select);
+      }
+      
+      // Apply expand if specified
+      if (options.expand && options.expand.length > 0) {
+        request = request.expand(options.expand);
+      }
+      
+      // Execute the request
+      const response = await request.get();
+      
+      // Handle isRead filtering client-side if needed
+      if (options.isRead !== undefined) {
+        response.value = response.value.filter((msg: ChatMessage) => 
+          options.isRead ? msg.isRead : !msg.isRead
+        );
+        
+        // Update the @odata.count to reflect the filtered count
+        if (response['@odata.count'] !== undefined) {
+          response['@odata.count'] = response.value.length;
+        }
+      }
+      
       return response as ChatMessageCollectionResponse;
     } catch (error) {
       console.error('Error getting chat messages:', error);
       throw new Error(`Failed to get chat messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+
+  
+  /**
+   * Get recent messages from all chats
+   * @param options Message listing options
+   * @returns Collection of recent messages
+   */
+  public async getRecentMessages(
+    options: Omit<ListMessagesOptions, 'afterDateTime' | 'beforeDateTime'> & { 
+      days?: number 
+    } = {}
+  ): Promise<ChatMessageCollectionResponse> {
+    try {
+      // Default to last 7 days if not specified
+      const days = options.days || 7;
+      const afterDateTime = new Date();
+      afterDateTime.setDate(afterDateTime.getDate() - days);
+      
+      // Define an extended message type that includes chat information
+      interface ExtendedChatMessage extends ChatMessage {
+        chatId: string;
+        chatTopic: string;
+        chatType: string;
+      }
+      
+      // Get all chats
+      const chats = await this.listChats({ top: 100 });
+      
+      // Get recent messages from each chat
+      const allMessages: ExtendedChatMessage[] = [];
+      
+      for (const chat of chats.value) {
+        try {
+          const messages = await this.getChatMessages(chat.id, {
+            ...options,
+            afterDateTime: afterDateTime.toISOString(),
+            top: options.top || 20 // Limit per chat to avoid too many requests
+          });
+          
+          // Add chat info to each message with proper typing
+          const messagesWithChatInfo: ExtendedChatMessage[] = messages.value.map(msg => ({
+            ...msg,
+            chatId: chat.id,
+            chatTopic: chat.topic || 'No Topic',
+            chatType: chat.chatType || 'unknown'
+          }));
+          
+          allMessages.push(...messagesWithChatInfo);
+        } catch (error) {
+          console.warn(`Error getting messages for chat ${chat.id}:`, error);
+          // Continue with next chat
+        }
+      }
+      
+      // Sort all messages by creation time (newest first)
+      allMessages.sort((a, b) => 
+        new Date(b.createdDateTime).getTime() - new Date(a.createdDateTime).getTime()
+      );
+      
+      // Apply pagination
+      const skip = options.skip || 0;
+      const top = options.top || 50;
+      const paginatedMessages = allMessages.slice(skip, skip + top);
+      
+      return {
+        value: paginatedMessages,
+        '@odata.nextLink': allMessages.length > skip + top 
+          ? `skip=${skip + top}&top=${top}` 
+          : undefined
+      };
+    } catch (error) {
+      console.error('Error getting recent messages:', error);
+      throw new Error(`Failed to get recent messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
