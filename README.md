@@ -168,11 +168,7 @@ Here's an example of how to structure the `members` array when creating a chat:
     {
       "id": "user2@example.com"
     }
-  ],
-  "message": {
-    "content": "Hello, let's discuss the project!",
-    "contentType": "text"
-  }
+  ]
 }
 ```
 
