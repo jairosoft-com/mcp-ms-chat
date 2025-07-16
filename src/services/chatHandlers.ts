@@ -27,8 +27,15 @@ export async function handleCreateChat(req: IncomingMessage, res: ServerResponse
         const chatData = JSON.parse(body);
         
         // Validate the chat data
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Authorization header with Bearer token is required' }));
+          return resolve();
+        }
+        const accessToken = authHeader.split(' ')[1];
+        
         const schema = z.object({
-          accessToken: z.string().min(1, 'Access token is required'),
           chatType: z.enum(['group', 'oneOnOne', 'meeting']),
           topic: z.string().min(1, 'Topic is required'),
           members: z.array(z.object({
@@ -39,10 +46,9 @@ export async function handleCreateChat(req: IncomingMessage, res: ServerResponse
         });
         
         const validatedData = schema.parse(chatData);
-        const { accessToken, ...rest } = validatedData;
         
         const chatService = new ChatService({ accessToken });
-        const chat = await chatService.createChat(rest);
+        const chat = await chatService.createChat(validatedData);
         
         res.writeHead(201, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -100,14 +106,14 @@ export async function handleCreateChat(req: IncomingMessage, res: ServerResponse
 export async function handleListChats(req: IncomingMessage, res: ServerResponse): Promise<void> {
   return new Promise<void>(async (resolve) => {
     try {
-      const url = new URL(req.url || '', `http://${req.headers.host}`);
-      const accessToken = url.searchParams.get('accessToken');
-
-      if (!accessToken) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'accessToken is required' }));
-        return resolve();
+      const authHeader = req.headers['authorization'];
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authorization header with Bearer token is required' }));
+        return Promise.resolve();
       }
+      const accessToken = authHeader.split(' ')[1];
+      const query = new URL(req.url || '', 'http://localhost').searchParams;
 
       const chatService = new ChatService({ accessToken });
       // Microsoft Graph API has a maximum limit of 50 items per request
@@ -153,8 +159,15 @@ export async function handleSendMessage(req: IncomingMessage, res: ServerRespons
     // Parse and validate the request body
     const messageData = JSON.parse(body);
     
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Authorization header with Bearer token is required' }));
+      return;
+    }
+    const accessToken = authHeader.split(' ')[1];
+    
     const schema = z.object({
-      accessToken: z.string().min(1, 'Access token is required'),
       chatId: z.string().min(1, 'Chat ID is required'),
       content: z.string().min(1, 'Message content is required'),
       contentType: z.enum(['text', 'html', 'content']).optional().default('text'),
@@ -177,9 +190,7 @@ export async function handleSendMessage(req: IncomingMessage, res: ServerRespons
     }
     
     // Initialize the chat service and send the message
-    const chatService = new ChatService({
-      accessToken: validation.data.accessToken
-    });
+    const chatService = new ChatService({ accessToken });
 
     const message = await chatService.sendMessage(
       validation.data.chatId,
@@ -216,15 +227,22 @@ export async function handleGetMessages(req: IncomingMessage, res: ServerRespons
     return;
   }
 
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Authorization header with Bearer token is required' }));
+    return;
+  }
+  const accessToken = authHeader.split(' ')[1];
+  
   const { searchParams } = new URL(req.url || '', `http://${req.headers.host}`);
-  const accessToken = searchParams.get('accessToken');
   const chatId = searchParams.get('chatId');
   const top = parseInt(searchParams.get('top') || '50', 10);
   
   try {
     // Validate query parameters
-    if (!accessToken || !chatId) {
-      throw new Error('accessToken and chatId are required');
+    if (!chatId) {
+      throw new Error('chatId is required');
     }
     
     const chatService = new ChatService({ accessToken });

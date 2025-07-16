@@ -13,6 +13,11 @@
           {
             "key": "Accept",
             "value": "text/event-stream"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
           }
         ],
         "url": {
@@ -20,7 +25,7 @@
           "host": ["{{baseUrl}}"],
           "path": ["api", "events"]
         },
-        "description": "Connect to the SSE endpoint to receive real-time updates"
+        "description": "Connect to the SSE endpoint to receive real-time updates. Requires an access token with appropriate permissions."
       },
       "response": []
     },
@@ -101,7 +106,8 @@
         "header": [
           {
             "key": "Authorization",
-            "value": "Bearer {{accessToken}}"
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
           }
         ],
         "url": {
@@ -125,7 +131,7 @@
             }
           ]
         },
-        "description": "Get messages from a specific chat with pagination"
+        "description": "Retrieve messages from a specific chat. The chatId should be a valid Microsoft Teams chat ID."
       },
       "response": []
     },
@@ -136,7 +142,8 @@
         "header": [
           {
             "key": "Authorization",
-            "value": "Bearer {{accessToken}}"
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
           }
         ],
         "url": {
@@ -183,17 +190,20 @@
     {
       "key": "baseUrl",
       "value": "http://localhost:3000",
-      "type": "string"
+      "type": "string",
+      "description": "The base URL of your API server"
     },
     {
       "key": "accessToken",
-      "value": "your_access_token_here",
-      "type": "string"
+      "value": "your-microsoft-graph-access-token",
+      "type": "string",
+      "description": "Microsoft Graph API access token with required permissions (Chat.Create, Chat.ReadWrite, etc.)"
     },
     {
       "key": "chatId",
       "value": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
-      "type": "string"
+      "type": "string",
+      "description": "Microsoft Teams chat ID (e.g., from the create chat response)"
     }
   ]
 }

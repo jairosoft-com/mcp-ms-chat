@@ -70,6 +70,14 @@ This service requires a valid Microsoft Graph API access token with the followin
 - `User.Read` - For basic user information
 - `Chat.ReadBasic` - For basic chat information
 
+### Authentication Header
+
+All API endpoints require an `Authorization` header with a valid Microsoft Graph API token in the following format:
+
+```
+Authorization: Bearer <your-access-token>
+```
+
 ### Obtaining an Access Token
 
 You can obtain an access token using one of these methods:
@@ -78,12 +86,18 @@ You can obtain an access token using one of these methods:
    - Go to [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer)
    - Sign in with your Microsoft 365 account
    - Request the required permissions
-   - Copy the access token
+   - Copy the access token from the "Access token" field
 
 2. **Azure Portal**:
    - Register an application in Azure AD
    - Configure the required API permissions
    - Use the OAuth 2.0 flow to obtain a token
+
+### Example Request with cURL
+
+```bash
+curl -X GET 'http://localhost:3000/api/chats' \
+  -H 'Authorization: Bearer <your-access-token>'
 
 ## API Endpoints
 
@@ -97,7 +111,7 @@ GET /api/events
 
 ### REST API Endpoints
 
-All API endpoints require an `Authorization` header with a valid Microsoft Graph API token.
+All API endpoints require an `Authorization` header with a valid Microsoft Graph API token in the format: `Authorization: Bearer <token>`
 
 #### Create a Chat
 ```
@@ -118,8 +132,9 @@ Authorization: Bearer <access_token>
 #### Send a Message
 ```
 POST /api/chats/{chatId}/messages
-Content-Type: application/json
-Authorization: Bearer <access_token>
+Headers:
+- `Content-Type: application/json`
+- `Authorization: Bearer <Microsoft-Graph-API-Token>`
 
 {
   "content": "Hello, team!",
