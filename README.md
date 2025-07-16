@@ -1,27 +1,31 @@
 # MCP Server for Microsoft Teams Chat
 
-A Node.js implementation of the Model Context Protocol (MCP) server for managing Microsoft Teams chats, built with TypeScript for type safety and better developer experience.
+A Node.js implementation of the Model Context Protocol (MCP) server for managing Microsoft Teams chats, built with TypeScript for type safety and better developer experience. This implementation uses Server-Sent Events (SSE) for real-time communication, making it ideal for containerized environments.
 
 ## Features
 
 - Create new chats in Microsoft Teams
-- Send messages to existing chats
+- Send and receive messages in real-time
+- Server-Sent Events (SSE) for efficient streaming
 - Microsoft Graph API integration
 - TypeScript support with comprehensive type definitions
 - Simple token-based authentication
 - Error handling and logging
 - MCP protocol implementation
+- Docker-ready for easy deployment
 
 ## Prerequisites
 
 - Node.js 18.x or later
 - npm 9.x or later
 - TypeScript 5.0 or later
+- Docker (optional, for containerization)
 - Microsoft 365 account with appropriate permissions
 - Microsoft Graph API access token with required permissions:
   - Chat.Create
   - Chat.ReadWrite
   - User.Read
+  - Chat.ReadBasic
 
 ## Getting Started
 
@@ -44,12 +48,27 @@ npm install
 npm run build
 ```
 
+### 4. Start the server
+
+```bash
+# Development
+npm run dev
+
+# Production
+npm start
+
+# Using Docker
+docker build -t mcp-ms-chat .
+docker run -p 3000:3000 mcp-ms-chat
+```
+
 ## Authentication
 
 This service requires a valid Microsoft Graph API access token with the following permissions:
 - `Chat.Create` - For creating new chats
 - `Chat.ReadWrite` - For reading and updating chats
 - `User.Read` - For basic user information
+- `Chat.ReadBasic` - For basic chat information
 
 ### Obtaining an Access Token
 
@@ -66,38 +85,160 @@ You can obtain an access token using one of these methods:
    - Configure the required API permissions
    - Use the OAuth 2.0 flow to obtain a token
 
-## Usage
+## API Endpoints
 
-All API endpoints require an `access_token` parameter with a valid Microsoft Graph API token.
+### Server-Sent Events (SSE)
 
-Example request:
+The server uses SSE for real-time communication. Connect to the following endpoint:
+
 ```
-create-chat --accessToken "your_access_token_here" --topic "Team Discussion" --chatType "group" --members '[{"id":"user1@example.com"}]'
+GET /api/events
 ```
 
-## Building the Project
+### REST API Endpoints
 
-To compile TypeScript to JavaScript:
+All API endpoints require an `Authorization` header with a valid Microsoft Graph API token.
+
+#### Create a Chat
+```
+POST /api/chats
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "topic": "Team Discussion",
+  "chatType": "group",
+  "members": [
+    {"id": "user1@example.com"},
+    {"id": "user2@example.com"}
+  ]
+}
+```
+
+#### Send a Message
+```
+POST /api/chats/{chatId}/messages
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "content": "Hello, team!",
+  "contentType": "text"
+}
+```
+
+#### Get Chat Messages
+```
+GET /api/chats/{chatId}/messages?top=50&skip=0
+Authorization: Bearer <access_token>
+```
+
+## Testing with Postman
+
+### 1. Setup
+1. Import the Postman collection from `postman/collection.json`
+2. Set up environment variables in Postman:
+   - `baseUrl`: Your server URL (e.g., `http://localhost:3000`)
+   - `accessToken`: Your Microsoft Graph API access token
+
+### 2. Sample Requests
+
+#### Create a Chat
+```
+POST {{baseUrl}}/api/chats
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "topic": "Project Sync",
+  "chatType": "group",
+  "members": [
+    {"id": "team1@example.com", "roles": ["owner"]},
+    {"id": "member1@example.com", "roles": ["guest"]}
+  ]
+}
+```
+
+#### Send a Rich Text Message
+```
+POST {{baseUrl}}/api/chats/19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2/messages
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "content": "<h1>Important Update</h1><p>Please review the <strong>Q2 Report</strong> before our meeting tomorrow.</p>",
+  "contentType": "html"
+}
+```
+
+### 3. Testing SSE
+
+1. Open a new tab in Postman
+2. Set request to `GET {{baseUrl}}/api/events`
+3. Add `Accept: text/event-stream` header
+4. Send the request
+5. In another tab, send a message to see real-time updates
+
+## Development
+
+### Building the Project
 
 ```bash
-npm run build
-```
-
-This will compile the TypeScript files and output them to the `build` directory.
-
-## Usage
-
-### Building and Running the Project
-
-### Install Dependencies
-
-```bash
+# Install dependencies
 npm install
+
+# Build TypeScript to JavaScript
+npm run build
+
+# Watch for changes (development)
+npm run dev
 ```
 
-### Build the Project
+### Environment Variables
 
-To compile TypeScript to JavaScript:
+Create a `.env` file in the root directory with the following variables:
+
+```env
+PORT=3000
+NODE_ENV=development
+LOG_LEVEL=debug
+```
+
+## Docker Deployment
+
+### Building the Image
+
+```bash
+docker build -t mcp-ms-chat .
+```
+
+### Running the Container
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -e PORT=3000 \
+  -e NODE_ENV=production \
+  -e LOG_LEVEL=info \
+  --name mcp-ms-chat \
+  mcp-ms-chat
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  mcp-chat:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+    restart: unless-stopped
+```
 
 ```bash
 npm run build
