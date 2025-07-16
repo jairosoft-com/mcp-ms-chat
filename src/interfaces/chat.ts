@@ -8,11 +8,17 @@ export interface ChatMember {
   /** The member's display name */
   displayName?: string;
   
-  /** The member's roles in the chat */
+  /** The member's email address */
+  email?: string;
+  
+  /** The member's roles in the chat (e.g., 'owner', 'guest') */
   roles?: string[];
   
   /** The member's user principal name (email) */
   userPrincipalName?: string;
+  
+  /** The type of user identity (e.g., 'aadUser', 'guest', 'externalUser') */
+  userIdentityType?: 'aadUser' | 'guest' | 'externalUser';
   
   /** The member's user ID */
   userId?: string;
