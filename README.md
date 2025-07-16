@@ -256,9 +256,9 @@ npm run dev
 npm start
 ```
 
-## Available Tools
+## Available MCP Tools
 
-The server provides the following MCP tools for managing Teams chats:
+The server provides the following MCP tools for managing Microsoft Teams chats through the Model Context Protocol:
 
 ### 1. **create-chat** - Create a new chat in Microsoft Teams
 
@@ -272,21 +272,144 @@ The server provides the following MCP tools for managing Teams chats:
   - `content`: (Required) The message content
   - `contentType`: (Optional) 'text', 'html', or 'content' (default: 'text')
 
-**Members Sample Payload:**
+**Example Request:**
+```json
+{
+  "topic": "Project Planning",
+  "chatType": "group",
+  "members": [
+    {
+      "id": "user1@example.com",
+      "roles": ["owner"]
+    },
+    {
+      "id": "user2@example.com"
+    }
+  ],
+  "message": {
+    "content": "Welcome to our project planning chat!",
+    "contentType": "text"
+  }
+}
+```
 
-Here's an example of how to structure the `members` array when creating a chat:
+### 2. **send-message** - Send a message to an existing chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat to send the message to
+- `content`: (Required) The message content
+- `contentType`: (Optional) 'text', 'html', or 'content' (default: 'text')
+- `messageMetadata`: (Optional) Additional metadata for the message
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "<h2>Meeting Agenda</h2><ol><li>Project updates</li><li>Q2 Planning</li></ol>",
+  "contentType": "html",
+  "messageMetadata": {
+    "priority": "high",
+    "tags": ["meeting", "agenda"]
+  }
+}
+```
+
+### 3. **get-chat** - Retrieve information about a specific chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat to retrieve
+- `expand`: (Optional) Related entities to include (e.g., 'members', 'messages')
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "expand": ["members", "messages"]
+}
+```
+
+### 4. **list-chats** - List all available chats
+
+**Parameters:**
+- `top`: (Optional) Number of chats to return (default: 50, max: 100)
+- `skip`: (Optional) Number of chats to skip for pagination
+- `filter`: (Optional) OData filter string
+- `orderby`: (Optional) Property to order results by
+
+**Example Request:**
+```json
+{
+  "top": 20,
+  "skip": 0,
+  "filter": "chatType eq 'group'",
+  "orderby": "lastMessagePreview/createdDateTime desc"
+}
+```
+
+### 5. **get-messages** - Retrieve messages from a chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat
+- `top`: (Optional) Number of messages to return (default: 50, max: 1000)
+- `skip`: (Optional) Number of messages to skip for pagination
+- `filter`: (Optional) OData filter string
+- `orderBy`: (Optional) Property to order results by
+- `select`: (Optional) Array of properties to include in the response
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "top": 30,
+  "filter": "createdDateTime ge 2025-07-01T00:00:00Z",
+  "orderBy": "createdDateTime desc",
+  "select": ["id", "content", "from", "createdDateTime"]
+}
+```
+
+### 6. **get-recent-messages** - Get recent messages across all chats
+
+**Parameters:**
+- `days`: (Optional) Number of days to look back (default: 7)
+- `top`: (Optional) Number of messages to return (default: 50, max: 100)
+- `from`: (Optional) Filter messages from a specific user (email or 'me')
+- `contains`: (Optional) Filter messages containing specific text
+
+**Example Request:**
+```json
+{
+  "days": 3,
+  "top": 20,
+  "from": "me",
+  "contains": "urgent"
+}
+```
+
+## Error Handling
+
+All API responses follow a standard format:
 
 ```json
-[
-  {
-    "id": "user1@example.com",
-    "roles": ["owner"]
-  },
-  {
-    "id": "user2@example.com",
-    "roles": []
+{
+  "success": false,
+  "error": {
+    "code": "AUTH_ERROR",
+    "message": "Authentication failed",
+    "details": "Invalid or expired access token"
   }
-]
+}
+```
+
+### Common Error Codes
+
+| Code | Description |
+|------|-------------|
+| `AUTH_ERROR` | Authentication failed or token is invalid |
+| `PERMISSION_DENIED` | Insufficient permissions |
+| `NOT_FOUND` | Resource not found |
+| `VALIDATION_ERROR` | Invalid request parameters |
+| `RATE_LIMIT_EXCEEDED` | Too many requests |
+| `INTERNAL_ERROR` | Server error |
 ```
 
 **Notes about members:**
