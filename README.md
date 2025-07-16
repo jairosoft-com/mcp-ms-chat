@@ -447,11 +447,7 @@ All API responses follow a standard format:
     {
       "id": "user2@example.com"
     }
-  ],
-  "message": {
-    "content": "Hello, let's discuss the project!",
-    "contentType": "text"
-  }
+  ]
 }
 ```
 
