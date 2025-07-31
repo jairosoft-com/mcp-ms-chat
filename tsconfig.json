@@ -9,8 +9,16 @@
     "skipLibCheck": true,
     "outDir": "./build",
     "rootDir": "./src",
-    "declaration": true
+    "declaration": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/tools/**/*", "node_modules"]
 }

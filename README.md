@@ -1,27 +1,31 @@
 # MCP Server for Microsoft Teams Chat
 
-A Node.js implementation of the Model Context Protocol (MCP) server for managing Microsoft Teams chats, built with TypeScript for type safety and better developer experience.
+A Node.js implementation of the Model Context Protocol (MCP) server for managing Microsoft Teams chats, built with TypeScript for type safety and better developer experience. This implementation uses Server-Sent Events (SSE) for real-time communication, making it ideal for containerized environments.
 
 ## Features
 
 - Create new chats in Microsoft Teams
-- Send messages to existing chats
+- Send and receive messages in real-time
+- Server-Sent Events (SSE) for efficient streaming
 - Microsoft Graph API integration
 - TypeScript support with comprehensive type definitions
 - Simple token-based authentication
 - Error handling and logging
 - MCP protocol implementation
+- Docker-ready for easy deployment
 
 ## Prerequisites
 
 - Node.js 18.x or later
 - npm 9.x or later
 - TypeScript 5.0 or later
+- Docker (optional, for containerization)
 - Microsoft 365 account with appropriate permissions
 - Microsoft Graph API access token with required permissions:
   - Chat.Create
   - Chat.ReadWrite
   - User.Read
+  - Chat.ReadBasic
 
 ## Getting Started
 
@@ -44,12 +48,35 @@ npm install
 npm run build
 ```
 
+### 4. Start the server
+
+```bash
+# Development
+npm run dev
+
+# Production
+npm start
+
+# Using Docker
+docker build -t mcp-ms-chat .
+docker run -p 3000:3000 mcp-ms-chat
+```
+
 ## Authentication
 
 This service requires a valid Microsoft Graph API access token with the following permissions:
 - `Chat.Create` - For creating new chats
 - `Chat.ReadWrite` - For reading and updating chats
 - `User.Read` - For basic user information
+- `Chat.ReadBasic` - For basic chat information
+
+### Authentication Header
+
+All API endpoints require an `Authorization` header with a valid Microsoft Graph API token in the following format:
+
+```
+Authorization: Bearer <your-access-token>
+```
 
 ### Obtaining an Access Token
 
@@ -59,45 +86,174 @@ You can obtain an access token using one of these methods:
    - Go to [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer)
    - Sign in with your Microsoft 365 account
    - Request the required permissions
-   - Copy the access token
+   - Copy the access token from the "Access token" field
 
 2. **Azure Portal**:
    - Register an application in Azure AD
    - Configure the required API permissions
    - Use the OAuth 2.0 flow to obtain a token
 
-## Usage
-
-All API endpoints require an `access_token` parameter with a valid Microsoft Graph API token.
-
-Example request:
-```
-create-chat --accessToken "your_access_token_here" --topic "Team Discussion" --chatType "group" --members '[{"id":"user1@example.com"}]'
-```
-
-## Building the Project
-
-To compile TypeScript to JavaScript:
+### Example Request with cURL
 
 ```bash
-npm run build
+curl -X GET 'http://localhost:3000/api/chats' \
+  -H 'Authorization: Bearer <your-access-token>'
+
+## API Endpoints
+
+### Server-Sent Events (SSE)
+
+The server uses SSE for real-time communication. Connect to the following endpoint:
+
+```
+GET /api/events
 ```
 
-This will compile the TypeScript files and output them to the `build` directory.
+### REST API Endpoints
 
-## Usage
+All API endpoints require an `Authorization` header with a valid Microsoft Graph API token in the format: `Authorization: Bearer <token>`
 
-### Building and Running the Project
+#### Create a Chat
+```
+POST /api/chats
+Content-Type: application/json
+Authorization: Bearer <access_token>
 
-### Install Dependencies
+{
+  "topic": "Team Discussion",
+  "chatType": "group",
+  "members": [
+    {"id": "user1@example.com"},
+    {"id": "user2@example.com"}
+  ]
+}
+```
+
+#### Send a Message
+```
+POST /api/chats/{chatId}/messages
+Headers:
+- `Content-Type: application/json`
+- `Authorization: Bearer <Microsoft-Graph-API-Token>`
+
+{
+  "content": "Hello, team!",
+  "contentType": "text"
+}
+```
+
+#### Get Chat Messages
+```
+GET /api/chats/{chatId}/messages?top=50&skip=0
+Authorization: Bearer <access_token>
+```
+
+## Testing with Postman
+
+### 1. Setup
+1. Import the Postman collection from `postman/collection.json`
+2. Set up environment variables in Postman:
+   - `baseUrl`: Your server URL (e.g., `http://localhost:3000`)
+   - `accessToken`: Your Microsoft Graph API access token
+
+### 2. Sample Requests
+
+#### Create a Chat
+```
+POST {{baseUrl}}/api/chats
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "topic": "Project Sync",
+  "chatType": "group",
+  "members": [
+    {"id": "team1@example.com", "roles": ["owner"]},
+    {"id": "member1@example.com", "roles": ["guest"]}
+  ]
+}
+```
+
+#### Send a Rich Text Message
+```
+POST {{baseUrl}}/api/chats/19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2/messages
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "content": "<h1>Important Update</h1><p>Please review the <strong>Q2 Report</strong> before our meeting tomorrow.</p>",
+  "contentType": "html"
+}
+```
+
+### 3. Testing SSE
+
+1. Open a new tab in Postman
+2. Set request to `GET {{baseUrl}}/api/events`
+3. Add `Accept: text/event-stream` header
+4. Send the request
+5. In another tab, send a message to see real-time updates
+
+## Development
+
+### Building the Project
 
 ```bash
+# Install dependencies
 npm install
+
+# Build TypeScript to JavaScript
+npm run build
+
+# Watch for changes (development)
+npm run dev
 ```
 
-### Build the Project
+### Environment Variables
 
-To compile TypeScript to JavaScript:
+Create a `.env` file in the root directory with the following variables:
+
+```env
+PORT=3000
+NODE_ENV=development
+LOG_LEVEL=debug
+```
+
+## Docker Deployment
+
+### Building the Image
+
+```bash
+docker build -t mcp-ms-chat .
+```
+
+### Running the Container
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -e PORT=3000 \
+  -e NODE_ENV=production \
+  -e LOG_LEVEL=info \
+  --name mcp-ms-chat \
+  mcp-ms-chat
+```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  mcp-chat:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+    restart: unless-stopped
+```
 
 ```bash
 npm run build
@@ -115,9 +271,9 @@ npm run dev
 npm start
 ```
 
-## Available Tools
+## Available MCP Tools
 
-The server provides the following MCP tools for managing Teams chats:
+The server provides the following MCP tools for managing Microsoft Teams chats through the Model Context Protocol:
 
 ### 1. **create-chat** - Create a new chat in Microsoft Teams
 
@@ -131,21 +287,144 @@ The server provides the following MCP tools for managing Teams chats:
   - `content`: (Required) The message content
   - `contentType`: (Optional) 'text', 'html', or 'content' (default: 'text')
 
-**Members Sample Payload:**
+**Example Request:**
+```json
+{
+  "topic": "Project Planning",
+  "chatType": "group",
+  "members": [
+    {
+      "id": "user1@example.com",
+      "roles": ["owner"]
+    },
+    {
+      "id": "user2@example.com"
+    }
+  ],
+  "message": {
+    "content": "Welcome to our project planning chat!",
+    "contentType": "text"
+  }
+}
+```
 
-Here's an example of how to structure the `members` array when creating a chat:
+### 2. **send-message** - Send a message to an existing chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat to send the message to
+- `content`: (Required) The message content
+- `contentType`: (Optional) 'text', 'html', or 'content' (default: 'text')
+- `messageMetadata`: (Optional) Additional metadata for the message
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "content": "<h2>Meeting Agenda</h2><ol><li>Project updates</li><li>Q2 Planning</li></ol>",
+  "contentType": "html",
+  "messageMetadata": {
+    "priority": "high",
+    "tags": ["meeting", "agenda"]
+  }
+}
+```
+
+### 3. **get-chat** - Retrieve information about a specific chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat to retrieve
+- `expand`: (Optional) Related entities to include (e.g., 'members', 'messages')
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "expand": ["members", "messages"]
+}
+```
+
+### 4. **list-chats** - List all available chats
+
+**Parameters:**
+- `top`: (Optional) Number of chats to return (default: 50, max: 100)
+- `skip`: (Optional) Number of chats to skip for pagination
+- `filter`: (Optional) OData filter string
+- `orderby`: (Optional) Property to order results by
+
+**Example Request:**
+```json
+{
+  "top": 20,
+  "skip": 0,
+  "filter": "chatType eq 'group'",
+  "orderby": "lastMessagePreview/createdDateTime desc"
+}
+```
+
+### 5. **get-messages** - Retrieve messages from a chat
+
+**Parameters:**
+- `chatId`: (Required) The ID of the chat
+- `top`: (Optional) Number of messages to return (default: 50, max: 1000)
+- `skip`: (Optional) Number of messages to skip for pagination
+- `filter`: (Optional) OData filter string
+- `orderBy`: (Optional) Property to order results by
+- `select`: (Optional) Array of properties to include in the response
+
+**Example Request:**
+```json
+{
+  "chatId": "19:meeting_NDQ4M2E4ZWMtYjYyMy00YjA2LWI0Y2ItYmYzY2MxNzNlY2Y4@thread.v2",
+  "top": 30,
+  "filter": "createdDateTime ge 2025-07-01T00:00:00Z",
+  "orderBy": "createdDateTime desc",
+  "select": ["id", "content", "from", "createdDateTime"]
+}
+```
+
+### 6. **get-recent-messages** - Get recent messages across all chats
+
+**Parameters:**
+- `days`: (Optional) Number of days to look back (default: 7)
+- `top`: (Optional) Number of messages to return (default: 50, max: 100)
+- `from`: (Optional) Filter messages from a specific user (email or 'me')
+- `contains`: (Optional) Filter messages containing specific text
+
+**Example Request:**
+```json
+{
+  "days": 3,
+  "top": 20,
+  "from": "me",
+  "contains": "urgent"
+}
+```
+
+## Error Handling
+
+All API responses follow a standard format:
 
 ```json
-[
-  {
-    "id": "user1@example.com",
-    "roles": ["owner"]
-  },
-  {
-    "id": "user2@example.com",
-    "roles": []
+{
+  "success": false,
+  "error": {
+    "code": "AUTH_ERROR",
+    "message": "Authentication failed",
+    "details": "Invalid or expired access token"
   }
-]
+}
+```
+
+### Common Error Codes
+
+| Code | Description |
+|------|-------------|
+| `AUTH_ERROR` | Authentication failed or token is invalid |
+| `PERMISSION_DENIED` | Insufficient permissions |
+| `NOT_FOUND` | Resource not found |
+| `VALIDATION_ERROR` | Invalid request parameters |
+| `RATE_LIMIT_EXCEEDED` | Too many requests |
+| `INTERNAL_ERROR` | Server error |
 ```
 
 **Notes about members:**

@@ -26,7 +26,6 @@ interface ChatServiceConfig extends AuthConfig {
  */
 class ChatService {
   private config: Omit<ChatServiceConfig, 'accessToken'> & { accessToken: string };
-  private tokenExpiry: number = 0;
 
   constructor(config: ChatServiceConfig) {
     if (!config.accessToken) {
@@ -46,7 +45,17 @@ class ChatService {
       // We know accessToken is defined because it's required in the constructor
       return Client.init({
         authProvider: (done) => {
-          done(null, this.config.accessToken);
+          try {
+            if (!this.config.accessToken) {
+              throw new Error('Access token is missing or invalid');
+            }
+            // Log the first 10 characters of the token for debugging (don't log the whole token for security)
+            console.log('Using access token starting with:', this.config.accessToken.substring(0, 10) + '...');
+            done(null, this.config.accessToken);
+          } catch (error) {
+            console.error('Error in authProvider:', error);
+            done(error as Error, null);
+          }
         }
       });
     } catch (error: unknown) {
@@ -95,51 +104,148 @@ If the problem persists, please contact your system administrator with the error
    * @param chatData Chat data including members and optional message
    * @returns The created chat
    */
+  /**
+   * Extracts tenant ID from JWT token
+   */
+  private getTenantIdFromToken(token: string): string | null {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(Buffer.from(base64, 'base64').toString());
+      return payload.tid || null;
+    } catch (error) {
+      console.error('Error extracting tenant ID from token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Gets the current user's UPN from the access token
+   */
+  private async getCurrentUserUpn(): Promise<string> {
+    try {
+      const client = await this.getAuthenticatedClient();
+      const me = await client.api('/me').get();
+      return me.userPrincipalName || me.mail || '';
+    } catch (error) {
+      console.error('Error getting current user info:', error);
+      throw new Error('Could not determine current user information');
+    }
+  }
+
   public async createChat(chatData: {
     topic: string;
     chatType: 'oneOnOne' | 'group' | 'meeting' | 'unknown';
     members: ChatMember[];
   }): Promise<Chat> {
     try {
+      console.log('Creating chat with data:', {
+        topic: chatData.topic,
+        chatType: chatData.chatType,
+        memberCount: chatData.members?.length || 0
+      });
+  
+      if (!chatData.members?.length) {
+        throw new Error('At least one member is required to create a chat');
+      }
+  
       const client = await this.getAuthenticatedClient();
       
+      // Get current user's UPN
+      const me = await client.api('/me').get();
+      const currentUserUpn = me.userPrincipalName;
+      if (!currentUserUpn) {
+        throw new Error('Could not determine current user information');
+      }
+      console.log('Current user UPN:', currentUserUpn);
+  
       // Format members for the API
-      const members = chatData.members.map(member => ({
-        '@odata.type': '#microsoft.graph.aadUserConversationMember',
-        'user@odata.bind': `https://graph.microsoft.com/v1.0/users/${member.id}`,
-        roles: member.roles || ['owner']
-      }));
-      
-      // Create the chat
-      const chatResponse = await client
-        .api('/chats')
-        .post({
-          chatType: chatData.chatType,
-          topic: chatData.topic,
-          members
-        });
-      
-      // Try to get the chat details, but fall back to basic info if we don't have permission
-      try {
-        return await this.getChat(chatResponse.id);
-      } catch (getChatError) {
-        console.warn('Warning: Could not fetch full chat details. You may need additional permissions like Chat.ReadAll.', getChatError);
-        // Return minimal chat info with just the ID and basic details
+      const members = await Promise.all(chatData.members.map(async (member) => {
+        if (!member.id) {
+          throw new Error('Member ID is required');
+        }
+  
+        // Handle both email and user ID formats
+        let userId = member.id;
+        if (!userId.includes('@')) {
+          // If it's not an email, try to get the user by ID
+          try {
+            const user = await client.api(`/users/${userId}`).get();
+            userId = user.userPrincipalName || userId;
+          } catch (error) {
+            console.warn(`Could not find user with ID ${userId}, using as-is`);
+          }
+        }
+  
         return {
-          id: chatResponse.id,
-          topic: chatData.topic,
-          chatType: chatData.chatType,
-          createdDateTime: new Date().toISOString(),
-          lastUpdatedDateTime: new Date().toISOString()
+          '@odata.type': '#microsoft.graph.aadUserConversationMember',
+          'user@odata.bind': `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userId)}`,
+          roles: Array.isArray(member.roles) && member.roles.length > 0 ? member.roles : ['guest']
         };
+      }));
+  
+      // Add current user if not already in members
+      const currentUserExists = members.some(m => 
+        m['user@odata.bind'].includes(encodeURIComponent(currentUserUpn))
+      );
+  
+      if (!currentUserExists) {
+        members.unshift({
+          '@odata.type': '#microsoft.graph.aadUserConversationMember',
+          'user@odata.bind': `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(currentUserUpn)}`,
+          roles: ['owner']
+        });
       }
-    } catch (error) {
-      if (error instanceof AuthenticationError) {
-        throw error;
+  
+      // Create the chat
+      const response = await client.api('/chats').post({
+        chatType: chatData.chatType,
+        topic: chatData.topic,
+        members
+      });
+  
+      if (!response?.id) {
+        throw new Error('Invalid response from Microsoft Graph API');
       }
+  
+      console.log('Chat created successfully with ID:', response.id);
+      return {
+        id: response.id,
+        topic: response.topic || chatData.topic,
+        chatType: response.chatType || chatData.chatType,
+        createdDateTime: response.createdDateTime || new Date().toISOString(),
+        lastUpdatedDateTime: response.lastUpdatedDateTime || new Date().toISOString(),
+        webUrl: response.webUrl || '',
+        members: response.members || members.map(m => ({
+          id: m['user@odata.bind'].split('/').pop() || '',
+          roles: m.roles
+        }))
+      };
+  
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const statusCode = (error as any)?.statusCode;
+      const errorCode = (error as any)?.code;
       
-      console.error('Error creating chat:', error);
-      throw new Error(`Failed to create chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error creating chat:', {
+        error: errorMessage,
+        statusCode,
+        code: errorCode,
+        timestamp: new Date().toISOString()
+      });
+  
+      // Provide more specific error messages for common scenarios
+      if (statusCode === 401) {
+        throw new Error('Authentication failed. Please check your access token and permissions.');
+      } else if (statusCode === 403) {
+        throw new Error('Insufficient permissions. The app needs Chat.Create and Chat.ReadWrite permissions.');
+      } else if (statusCode === 404) {
+        throw new Error('One or more users could not be found. Please verify the user IDs and try again.');
+      } else if (errorMessage.includes('TenantNotFound')) {
+        throw new Error('The specified tenant was not found. Please verify your Azure AD tenant configuration.');
+      }
+  
+      throw new Error(`Failed to create chat: ${errorMessage}`);
     }
   }
 
@@ -211,13 +317,16 @@ If the problem persists, please contact your system administrator with the error
       
       let request = client.api('/me/chats');
       
-      // Apply pagination
-      if (options.top) {
-        request = request.top(options.top);
-      }
+      // Apply pagination - Microsoft Graph has a max of 50 items per page
+      const top = options.top ? Math.min(options.top, 50) : 50;
+      request = request.top(top);
 
-      if (options.skip) {
-        request = request.top(options.skip);
+      // Skip is not directly supported in Microsoft Graph v1.0 for /me/chats
+      // We'll use it as an offset for server-side pagination if needed
+      if (options.skip && options.skip > 0) {
+        // Note: This is a simplified approach. For production, you might want to implement
+        // proper pagination using @odata.nextLink from the response
+        console.warn('Skip parameter may not work as expected with Microsoft Graph API');
       }
             
       // Apply filters if provided
@@ -240,9 +349,15 @@ If the problem persists, please contact your system administrator with the error
         request = request.expand(options.expand);
       }
       
-      console.error("request: ", request);
       const response = await request.get();
-      return response as ChatCollectionResponse;
+      
+      // Transform the response to match our ChatCollectionResponse type
+      const result: ChatCollectionResponse = {
+        value: response.value || [],
+        '@odata.nextLink': response['@odata.nextLink']
+      };
+      
+      return result;
     } catch (error) {
       console.error('Error listing chats:', error);
       throw new Error(`Failed to list chats: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -349,93 +464,48 @@ If the problem persists, please contact your system administrator with the error
     }
   }
 
-
-  
   /**
-   * Get recent messages from all chats
-   * @param options Message listing options
-   * @returns Collection of recent messages
+   * Get messages from a chat with pagination support
+   * @param chatId The ID of the chat to get messages from
+   * @param options Options for pagination and filtering
+   * @returns Array of chat messages
    */
-  public async getRecentMessages(
-    options: Omit<ListMessagesOptions, 'afterDateTime' | 'beforeDateTime'> & { 
-      days?: number 
+  public async getMessages(
+    chatId: string,
+    options: {
+      top?: number;
+      skip?: number;
+      filter?: string;
+      orderBy?: string;
+      select?: string[];
+      expand?: string[];
     } = {}
-  ): Promise<ChatMessageCollectionResponse> {
-    try {
-      // Default to last 7 days if not specified
-      const days = options.days || 7;
-      const afterDateTime = new Date();
-      afterDateTime.setDate(afterDateTime.getDate() - days);
-      
-      // Define an extended message type that includes chat information
-      interface ExtendedChatMessage extends ChatMessage {
-        chatId: string;
-        chatTopic: string;
-        chatType: string;
-      }
-      
-      // Get all chats
-      const chats = await this.listChats({ top: 100 });
-      
-      // Get recent messages from each chat
-      const allMessages: ExtendedChatMessage[] = [];
-      
-      for (const chat of chats.value) {
-        try {
-          const messages = await this.getChatMessages(chat.id, {
-            ...options,
-            afterDateTime: afterDateTime.toISOString(),
-            top: options.top || 20 // Limit per chat to avoid too many requests
-          });
-          
-          // Add chat info to each message with proper typing
-          const messagesWithChatInfo: ExtendedChatMessage[] = messages.value.map(msg => ({
-            ...msg,
-            chatId: chat.id,
-            chatTopic: chat.topic || 'No Topic',
-            chatType: chat.chatType || 'unknown'
-          }));
-          
-          allMessages.push(...messagesWithChatInfo);
-        } catch (error) {
-          console.warn(`Error getting messages for chat ${chat.id}:`, error);
-          // Continue with next chat
-        }
-      }
-      
-      // Sort all messages by creation time (newest first)
-      allMessages.sort((a, b) => 
-        new Date(b.createdDateTime).getTime() - new Date(a.createdDateTime).getTime()
-      );
-      
-      // Apply pagination
-      const skip = options.skip || 0;
-      const top = options.top || 50;
-      const paginatedMessages = allMessages.slice(skip, skip + top);
-      
-      return {
-        value: paginatedMessages,
-        '@odata.nextLink': allMessages.length > skip + top 
-          ? `skip=${skip + top}&top=${top}` 
-          : undefined
-      };
-    } catch (error) {
-      console.error('Error getting recent messages:', error);
-      throw new Error(`Failed to get recent messages: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  /**
-   * Delete a chat
-   * @param chatId The ID of the chat to delete
-   */
-  public async deleteChat(chatId: string): Promise<void> {
+  ): Promise<ChatMessage[]> {
     try {
       const client = await this.getAuthenticatedClient();
-      await client.api(`/chats/${chatId}`).delete();
+      
+      // Build the query parameters
+      const query: Record<string, string | number> = {};
+      if (options.top) query.$top = options.top;
+      if (options.skip) query.$skip = options.skip;
+      if (options.filter) query.$filter = options.filter;
+      if (options.orderBy) query.$orderby = options.orderBy;
+      if (options.select) query.$select = options.select.join(',');
+      if (options.expand) query.$expand = options.expand.join(',');
+
+      // Make the API request
+      const response = await client
+        .api(`/chats/${chatId}/messages`)
+        .query(query)
+        .get();
+
+      // Return the messages array from the response
+      return response.value || [];
     } catch (error) {
-      console.error('Error deleting chat:', error);
-      throw new Error(`Failed to delete chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Error fetching chat messages:', error);
+      throw new Error(
+        `Failed to fetch messages: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 }
