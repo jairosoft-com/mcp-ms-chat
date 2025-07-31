@@ -11,8 +11,22 @@ export interface ChatResponse {
     webUrl?: string;
     chatType: 'oneOnOne' | 'group' | 'meeting' | 'unknown';
     createdDateTime: string;
-    topic?: string;
+    lastUpdatedDateTime?: string;
+    topic?: string | null;
+    isHiddenForAllMembers?: boolean;
+    members?: any[];
+    chatViewpoint?: {
+        isHidden: boolean;
+        lastMessageReadDateTime: string;
+    };
     [key: string]: any;
+}
+
+export interface ChatListResponse {
+    "@odata.context": string;
+    "@odata.count"?: number;
+    "@odata.nextLink"?: string;
+    value: ChatResponse[];
 }
 
 // Define environment variable types

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GraphUser, ChatResponse } from "../interface/chatInterfaces";
+import { GraphUser, ChatResponse, ChatListResponse } from "../interface/chatInterfaces";
     
 // Shared authentication token
 let currentAuthToken: string | undefined;
@@ -7,6 +7,171 @@ let currentAuthToken: string | undefined;
 // Function to set the authentication token
 export function setAuthToken(token: string | undefined) {
     currentAuthToken = token;
+}
+
+export async function listChats(options?: {
+    top?: number;
+    skip?: number;
+    filter?: string;
+    orderBy?: string;
+    expand?: string[];
+}): Promise<ChatListResponse> {
+    if (!currentAuthToken) {
+        throw new Error("Authentication token not found. Please set the AUTH_TOKEN environment variable.");
+    }
+
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    if (options?.top) queryParams.append('$top', options.top.toString());
+    if (options?.skip) queryParams.append('$skip', options.skip.toString());
+    if (options?.filter) queryParams.append('$filter', options.filter);
+    if (options?.orderBy) queryParams.append('$orderby', options.orderBy);
+    if (options?.expand?.length) {
+        queryParams.append('$expand', options.expand.join(','));
+    }
+
+    const url = `https://graph.microsoft.com/v1.0/me/chats?${queryParams.toString()}`;
+    
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${currentAuthToken}`,
+            'Content-Type': 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json() as { error?: { message?: string } };
+        throw new Error(`Failed to list chats: ${errorData?.error?.message || response.statusText}`);
+    }
+
+    return await response.json() as ChatListResponse;
+}
+
+export function listChatsTool() {
+    return {
+        name: "listChats",
+        schema: {
+            top: z.number().optional().describe("Number of chats to return per page (default: 50, max: 100)"),
+            skip: z.number().optional().describe("Number of chats to skip for pagination"),
+            filter: z.string().optional().describe("OData filter query to filter the results"),
+            orderBy: z.string().optional().describe("OData orderBy query to sort the results"),
+            includeMembers: z.boolean().optional().default(true).describe("Whether to include member information for each chat"),
+            expand: z.array(z.string()).optional().default(['members']).describe("Array of relationships to expand in the response (e.g., ['members', 'lastMessagePreview'])")
+        },
+        handler: async ({
+            top,
+            skip,
+            filter,
+            orderBy,
+            includeMembers = true,
+            expand = ['members']
+        }: {
+            top?: number;
+            skip?: number;
+            filter?: string;
+            orderBy?: string;
+            includeMembers?: boolean;
+            expand?: string[];
+        }) => {
+            try {
+                const result = await listChats({
+                    top,
+                    skip,
+                    filter,
+                    orderBy,
+                    expand
+                });
+
+                // Format the response for MCP with detailed information in the main text
+                const formattedChats = await Promise.all(result.value.map(async (chat) => {
+                    const chatData: any = {
+                        id: chat.id,
+                        topic: chat.topic || 'No topic',
+                        chatType: chat.chatType,
+                        createdDateTime: chat.createdDateTime,
+                        lastUpdatedDateTime: chat.lastUpdatedDateTime,
+                        webUrl: chat.webUrl,
+                        isHiddenForAllMembers: chat.isHiddenForAllMembers || false
+                    };
+
+                    // Include members if requested and available
+                    if (includeMembers && chat.members) {
+                        chatData.members = chat.members.map((member: any) => ({
+                            id: member.userId || member.email,
+                            displayName: member.displayName || 'Unknown',
+                            roles: member.roles || [],
+                            email: member.email || ''
+                        }));
+                    }
+
+                    return chatData;
+                }));
+
+                // Create a detailed text response that includes all chat information
+                let responseText = `Found ${result.value.length} chats\n\n`;
+                
+                if (formattedChats.length > 0) {
+                    responseText += "Chat Details:\n";
+                    responseText += "=".repeat(50) + "\n\n";
+                    
+                    formattedChats.forEach((chat, index) => {
+                        responseText += `${index + 1}. Chat ID: ${chat.id}\n`;
+                        responseText += `   Topic: ${chat.topic}\n`;
+                        responseText += `   Type: ${chat.chatType}\n`;
+                        responseText += `   Created: ${chat.createdDateTime}\n`;
+                        responseText += `   Last Updated: ${chat.lastUpdatedDateTime || 'N/A'}\n`;
+                        responseText += `   Hidden: ${chat.isHiddenForAllMembers}\n`;
+                        
+                        if (chat.webUrl) {
+                            responseText += `   Web URL: ${chat.webUrl}\n`;
+                        }
+                        
+                        if (chat.members && chat.members.length > 0) {
+                            responseText += `   Members (${chat.members.length}):\n`;
+                            chat.members.forEach((member: any, memberIndex: number) => {
+                                responseText += `     ${memberIndex + 1}. ${member.displayName}`;
+                                if (member.email) {
+                                    responseText += ` (${member.email})`;
+                                }
+                                responseText += `\n        ID: ${member.id}\n`;
+                                if (member.roles && member.roles.length > 0) {
+                                    responseText += `        Roles: ${member.roles.join(', ')}\n`;
+                                }
+                            });
+                        }
+                        
+                        responseText += "\n" + "-".repeat(30) + "\n\n";
+                    });
+                } else {
+                    responseText += "No chats found matching the criteria.\n";
+                }
+
+                // Add pagination info if available
+                if (result["@odata.count"]) {
+                    responseText += `\nTotal Count: ${result["@odata.count"]}\n`;
+                }
+                if (result["@odata.nextLink"]) {
+                    responseText += `Next Page Available: Yes\n`;
+                }
+
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: responseText
+                    }]
+                };
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: `Error listing chats: ${errorMessage}`
+                    }],
+                    isError: true
+                };
+            }
+        }
+    };
 }
 
 export function createChat() {
