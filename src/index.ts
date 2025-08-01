@@ -1,83 +1,72 @@
-// @ts-ignore - Missing type definitions for @modelcontextprotocol/sdk
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-// @ts-ignore - Missing type definitions for @modelcontextprotocol/sdk
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { SseServer } from './server/sseServer.js';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { McpAgent } from "agents/mcp";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Env } from "./interface/chatInterfaces";
+import { createChat, listChatsTool, setAuthToken, sendMessageTool } from "./tools/chatTools";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Define our MCP agent with tools
+export class MyMCP extends McpAgent {
+	server = new McpServer({
+		name: "Microsoft Chat Fetcher",
+		version: "1.0.0",
+	});
 
-dotenv.config();
+	async init() {
+		try {
+			// Get tool definitions by calling the factory functions
+			const createChatTool = createChat();
+			const listChatsToolInstance = listChatsTool();
 
-// Create MCP server instance
-const mcpServer = new McpServer({
-  name: "ms-teams-chat",
-  version: "1.0.0",
-  description: "Microsoft Teams Chat Integration"
-});
+			// Register the tools with the MCP server
+			this.server.tool(
+				createChatTool.name,
+				createChatTool.schema,
+				createChatTool.handler
+			);
 
-// Create SSE server instance
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-const sseServer = new SseServer(PORT);
+			this.server.tool(
+				listChatsToolInstance.name,
+				listChatsToolInstance.schema,
+				listChatsToolInstance.handler
+			);
 
-// Handle graceful shutdown
-async function shutdown() {
-  console.log('Shutting down servers...');
-  try {
-    await sseServer.stop();
-    console.log('SSE Server stopped successfully');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error during shutdown:', error);
-    process.exit(1);
-  }
+			// Register the send message tool
+			const sendMessageToolInstance = sendMessageTool();
+			this.server.tool(
+				sendMessageToolInstance.name,
+				sendMessageToolInstance.schema,
+				sendMessageToolInstance.handler
+			);
+
+			console.log('Registered tools:', [
+				createChatTool.name, 
+				listChatsToolInstance.name,
+				sendMessageToolInstance.name
+			].join(', '));
+		} catch (error) {
+			console.error('Error initializing MCP tools:', error);
+			throw error;
+		}
+    }
 }
 
-// Handle process termination
-process.on('SIGINT', () => {
-  console.log('Received SIGINT. Starting graceful shutdown...');
-  shutdown().catch(console.error);
-});
+export default {
+    fetch(request: Request, env: Env, ctx: ExecutionContext) {
+        const url = new URL(request.url);
+        const tokenFromUrl = url.searchParams.get('token');
+        const authToken = tokenFromUrl || env.AUTH_TOKEN;
+        
+        console.log('Auth token received:', authToken ? `${authToken.substring(0, 10)}...` : 'No token found');
+		
+		setAuthToken(authToken);
 
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM. Starting graceful shutdown...');
-  shutdown().catch(console.error);
-});
+		if (url.pathname === "/sse" || url.pathname === "/sse/message") {
+			return MyMCP.serveSSE("/sse").fetch(request, env, ctx);
+		}
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught exception:', error);
-  shutdown().catch(() => process.exit(1));
-});
+		if (url.pathname === "/mcp") {
+			return MyMCP.serve("/mcp").fetch(request, env, ctx);
+		}
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  shutdown().catch(console.error);
-});
-
-// Start both servers
-async function main() {
-  try {
-    // Start MCP server
-    const transport = new StdioServerTransport();
-    await mcpServer.connect(transport);
-    console.log("MCP Chat Server running on stdio");
-
-    // Start SSE server
-    await sseServer.start();
-    console.log("SSE Chat Server started");
-  } catch (error) {
-    console.error('Failed to start servers:', error);
-    process.exit(1);
-  }
-}
-
-// Start the servers
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+		return new Response("Not found", { status: 404 });
+	},
+};
