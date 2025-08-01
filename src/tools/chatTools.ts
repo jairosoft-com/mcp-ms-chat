@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GraphUser, ChatResponse, ChatListResponse } from "../interface/chatInterfaces";
+import { GraphUser, ChatResponse, ChatListResponse, SendMessageRequest, SendMessageResponse } from "../interface/chatInterfaces";
     
 // Shared authentication token
 let currentAuthToken: string | undefined;
@@ -168,6 +168,86 @@ export function listChatsTool() {
                         text: `Error listing chats: ${errorMessage}`
                     }],
                     isError: true
+                };
+            }
+        }
+    };
+}
+
+export async function sendMessage(chatId: string, message: SendMessageRequest): Promise<SendMessageResponse> {
+    if (!currentAuthToken) {
+        throw new Error("Authentication token not found. Please set the AUTH_TOKEN environment variable.");
+    }
+
+    const url = `https://graph.microsoft.com/v1.0/chats/${chatId}/messages`;
+    
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${currentAuthToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json() as { error?: { message?: string } };
+        throw new Error(`Failed to send message: ${errorData?.error?.message || response.statusText}`);
+    }
+
+    return await response.json() as SendMessageResponse;
+}
+
+export function sendMessageTool() {
+    return {
+        name: "sendMessage",
+        schema: {
+            chatId: z.string().describe("The ID of the chat to send the message to"),
+            content: z.string().describe("The content of the message"),
+            contentType: z.enum(['text', 'html']).default('text').describe("The content type of the message"),
+            subject: z.string().optional().describe("The subject of the message"),
+            importance: z.enum(['normal', 'high', 'urgent']).default('normal').describe("The importance of the message")
+        },
+        handler: async ({
+            chatId,
+            content,
+            contentType = 'text',
+            subject,
+            importance = 'normal'
+        }: {
+            chatId: string;
+            content: string;
+            contentType?: 'text' | 'html';
+            subject?: string;
+            importance?: 'normal' | 'high' | 'urgent';
+        }) => {
+            try {
+                const messageRequest: SendMessageRequest = {
+                    body: {
+                        contentType,
+                        content
+                    },
+                    importance,
+                    ...(subject && { subject })
+                };
+
+                const result = await sendMessage(chatId, messageRequest);
+
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: `✅ Message sent successfully!\n` +
+                              `📅 Sent at: ${new Date(result.createdDateTime).toLocaleString()}\n` +
+                              (result.webUrl ? `🔗 View message: ${result.webUrl}\n` : '')
+                    }]
+                };
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                return {
+                    content: [{
+                        type: "text" as const,
+                        text: `❌ Failed to send message: ${errorMessage}`
+                    }]
                 };
             }
         }

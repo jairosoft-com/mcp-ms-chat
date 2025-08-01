@@ -33,3 +33,50 @@ export interface ChatListResponse {
 export interface Env {
     AUTH_TOKEN?: string;
 }
+
+export interface ChatMessage {
+    id?: string;
+    replyToId?: string;
+    etag?: string;
+    messageType: 'message' | 'systemEventMessage' | 'unknownFutureValue';
+    createdDateTime: string;
+    lastModifiedDateTime?: string;
+    lastEditedDateTime?: string;
+    deletedDateTime?: string;
+    subject?: string | null;
+    summary?: string | null;
+    importance: 'normal' | 'high' | 'urgent';
+    locale: string;
+    webUrl?: string;
+    from?: {
+        application?: any;
+        device?: any;
+        user?: {
+            id: string;
+            displayName?: string;
+            userIdentityType?: 'aadUser' | 'onPremiseAadUser' | 'anonymousGuest' | 'federatedUser' | 'personalMicrosoftAccountUser' | 'skypeUser' | 'phoneUser' | 'unknownFutureValue';
+        };
+    };
+    body: {
+        contentType: 'text' | 'html';
+        content: string;
+    };
+    attachments?: any[];
+    mentions?: any[];
+    reactions?: any[];
+}
+
+export interface SendMessageRequest {
+    body: {
+        contentType: 'text' | 'html';
+        content: string;
+    };
+    subject?: string | null;
+    importance?: 'normal' | 'high' | 'urgent';
+}
+
+export interface SendMessageResponse {
+    id: string;
+    createdDateTime: string;
+    webUrl?: string;
+}

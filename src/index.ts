@@ -1,7 +1,7 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Env } from "./interface/chatInterfaces";
-import { createChat, listChatsTool, setAuthToken } from "./tools/chatTools";
+import { createChat, listChatsTool, setAuthToken, sendMessageTool } from "./tools/chatTools";
 
 // Define our MCP agent with tools
 export class MyMCP extends McpAgent {
@@ -29,7 +29,19 @@ export class MyMCP extends McpAgent {
 				listChatsToolInstance.handler
 			);
 
-			console.log('Registered tools:', [createChatTool.name, listChatsToolInstance.name].join(', '));
+			// Register the send message tool
+			const sendMessageToolInstance = sendMessageTool();
+			this.server.tool(
+				sendMessageToolInstance.name,
+				sendMessageToolInstance.schema,
+				sendMessageToolInstance.handler
+			);
+
+			console.log('Registered tools:', [
+				createChatTool.name, 
+				listChatsToolInstance.name,
+				sendMessageToolInstance.name
+			].join(', '));
 		} catch (error) {
 			console.error('Error initializing MCP tools:', error);
 			throw error;
