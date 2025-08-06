@@ -1,22 +1,14 @@
 import { z } from "zod";
 import { GraphUser, ChatResponse, ChatListResponse, SendMessageRequest, SendMessageResponse } from "../interface/chatInterfaces";
     
-// Shared authentication token
-let currentAuthToken: string | undefined;
-
-// Function to set the authentication token
-export function setAuthToken(token: string | undefined) {
-    currentAuthToken = token;
-}
-
-export async function listChats(options?: {
+export async function listChats(token: string, options?: {
     top?: number;
     skip?: number;
     filter?: string;
     orderBy?: string;
     expand?: string[];
 }): Promise<ChatListResponse> {
-    if (!currentAuthToken) {
+    if (!token) {
         throw new Error("Authentication token not found. Please set the AUTH_TOKEN environment variable.");
     }
 
@@ -34,7 +26,7 @@ export async function listChats(options?: {
     
     const response = await fetch(url, {
         headers: {
-            'Authorization': `Bearer ${currentAuthToken}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
     });
@@ -47,8 +39,9 @@ export async function listChats(options?: {
     return await response.json() as ChatListResponse;
 }
 
-export function listChatsTool() {
+export function listChatsTool(token: string) {
     return {
+        token,
         name: "listChats",
         schema: {
             top: z.number().optional().describe("Number of chats to return per page (default: 50, max: 100)"),
@@ -74,7 +67,7 @@ export function listChatsTool() {
             expand?: string[];
         }) => {
             try {
-                const result = await listChats({
+                const result = await listChats(token, {
                     top,
                     skip,
                     filter,
@@ -174,8 +167,8 @@ export function listChatsTool() {
     };
 }
 
-export async function sendMessage(chatId: string, message: SendMessageRequest): Promise<SendMessageResponse> {
-    if (!currentAuthToken) {
+export async function sendMessage(token: string, chatId: string, message: SendMessageRequest): Promise<SendMessageResponse> {
+    if (!token) {
         throw new Error("Authentication token not found. Please set the AUTH_TOKEN environment variable.");
     }
 
@@ -184,7 +177,7 @@ export async function sendMessage(chatId: string, message: SendMessageRequest): 
     const response = await fetch(url, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${currentAuthToken}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(message)
@@ -198,8 +191,9 @@ export async function sendMessage(chatId: string, message: SendMessageRequest): 
     return await response.json() as SendMessageResponse;
 }
 
-export function sendMessageTool() {
+export function sendMessageTool(token: string) {
     return {
+        token,
         name: "sendMessage",
         schema: {
             chatId: z.string().describe("The ID of the chat to send the message to"),
@@ -231,7 +225,7 @@ export function sendMessageTool() {
                     ...(subject && { subject })
                 };
 
-                const result = await sendMessage(chatId, messageRequest);
+                const result = await sendMessage(token, chatId, messageRequest);
 
                 return {
                     content: [{
@@ -254,8 +248,9 @@ export function sendMessageTool() {
     };
 }
 
-export function createChat() {
+export function createChat(token: string) {
     return {
+        token,
         name: "createChat",
         schema: {
             chatType: z.enum(['oneOnOne', 'group', 'meeting', 'unknown']).describe("Type of chat to create"),
@@ -275,14 +270,14 @@ export function createChat() {
             members: Array<{ id: string; displayName?: string; email?: string }>;
         }) => {
             try {
-                if (!currentAuthToken) {
+                if (!token) {
                     throw new Error("Authentication token not found. Please configure the AUTH_TOKEN environment variable in your MCP server configuration.");
                 }
 
                 // First, get the current user's information
                 const meResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
                     headers: {
-                        'Authorization': `Bearer ${currentAuthToken}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 });
@@ -330,7 +325,7 @@ export function createChat() {
                 const response = await fetch('https://graph.microsoft.com/v1.0/chats', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${currentAuthToken}`,
+                        'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(requestBody)
