@@ -1,34 +1,26 @@
 {
-  "name": "mcp-server-node",
-  "version": "1.0.0",
-  "main": "build/index.js",
-  "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "start": "node build/index.js",
-    "dev": "tsx watch src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "mcp",
-    "microsoft-graph",
-    "teams",
-    "chat"
-  ],
-  "author": "",
-  "license": "ISC",
-  "description": "MCP Server for Microsoft Teams Chat Integration",
-  "devDependencies": {
-    "@types/node": "^22.16.0",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@azure/identity": "^4.10.2",
-    "@microsoft/microsoft-graph-client": "^3.0.7",
-    "@modelcontextprotocol/sdk": "^1.12.3",
-    "dotenv": "^16.4.5",
-    "zod": "^3.25.67"
-  }
+	"name": "remote-mcp-server-authless",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"build": "tsc",
+		"prestart": "npm run build",
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev --ip=0.0.0.0",
+		"format": "biome format --write",
+		"lint:fix": "biome lint --fix",
+		"start": "wrangler dev",
+		"cf-typegen": "wrangler types",
+		"type-check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "1.13.1",
+		"agents": "^0.0.100",
+		"zod": "^3.25.67"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.0.6",
+		"typescript": "^5.8.3",
+		"wrangler": "^4.22.0"
+	}
 }
